@@ -1,0 +1,722 @@
+{% extends "base.html" %}
+{% block title %}Translator — SignLanguageTranslator{% endblock %}
+
+{% block extra_head %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<style>
+  body { overflow: hidden; }
+  main { height: calc(100vh - 56px); display: flex; flex-direction: column; }
+
+  /* ─── Top bar ─────────────────────────────────────────── */
+  .tbar {
+    height: 44px; flex-shrink: 0;
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; padding: 0 16px;
+    font-size: 0.8rem; z-index: 10;
+  }
+  .tbar-sep { width: 1px; height: 20px; background: var(--border); }
+
+  /* ─── Workspace grid ──────────────────────────────────── */
+  .workspace {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: 260px 1fr 300px;
+  }
+  @media(max-width:1024px) {
+    .workspace { grid-template-columns: 1fr; }
+    .panel-left, .panel-right { display: none; }
+  }
+
+  /* ─── Panel Left ──────────────────────────────────────── */
+  .panel-left {
+    background: var(--surface); border-right: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow-y: auto;
+  }
+  .p-section { padding: 16px; border-bottom: 1px solid var(--border); }
+  .p-section-title {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text3); margin-bottom: 12px;
+  }
+  .ctrl-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; gap: 8px;
+  }
+  .ctrl-label {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.83rem; color: var(--text2);
+  }
+  .ctrl-label i { width: 14px; text-align: center; color: var(--text3); font-size: 12px; }
+
+  /* Slider track color updated on input */
+  .conf-slider { margin: 4px 0; }
+
+  /* ─── Camera Panel ────────────────────────────────────── */
+  .camera-panel {
+    background: #141414; position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; margin: 12px; border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+  }
+  #videoElement { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 13px; }
+
+  /* Corner markers */
+  .corner { position: absolute; width: 18px; height: 18px; z-index: 4; }
+  .corner::before, .corner::after { content: ''; position: absolute; background: #ffffff; opacity: 0.7; }
+  .corner.tl { top:16px; left:16px; }
+  .corner.tl::before { width:2px;height:16px;top:0;left:0; }
+  .corner.tl::after  { width:16px;height:2px;top:0;left:0; }
+  .corner.tr { top:16px; right:16px; }
+  .corner.tr::before { width:2px;height:16px;top:0;right:0; }
+  .corner.tr::after  { width:16px;height:2px;top:0;right:0; }
+  .corner.bl { bottom:16px; left:16px; }
+  .corner.bl::before { width:2px;height:16px;bottom:0;left:0; }
+  .corner.bl::after  { width:16px;height:2px;bottom:0;left:0; }
+  .corner.br { bottom:16px; right:16px; }
+  .corner.br::before { width:2px;height:16px;bottom:0;right:0; }
+  .corner.br::after  { width:16px;height:2px;bottom:0;right:0; }
+
+  /* Overlay HUD */
+  .cam-hud-top {
+    position:absolute; top:14px; left:16px; right:16px;
+    padding:8px 14px;
+    background:rgba(20, 20, 20, 0.75); backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+    display:flex; align-items:center; justify-content:space-between;
+    z-index:5; box-shadow:0 2px 10px rgba(0,0,0,0.2);
+  }
+  .cam-hud-bot {
+    position:absolute; bottom:14px; left:16px; right:16px;
+    padding:8px 14px;
+    background:rgba(20, 20, 20, 0.75); backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+    display:flex; align-items:center; justify-content:space-between;
+    z-index:5; box-shadow:0 2px 10px rgba(0,0,0,0.2);
+  }
+
+  /* Detected word pop chip */
+  .det-chip {
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    background:#ffffff; border:1px solid #141414;
+    border-radius:12px; padding:10px 24px;
+    font-size:1.35rem; font-weight:800; color:#141414;
+    opacity:0; pointer-events:none; z-index:10;
+    transition:opacity 0.2s;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  }
+  .det-chip.show { opacity:1; animation:wordPop 0.25s ease-out; }
+
+  /* Camera error */
+  #camError {
+    display:none; position:absolute; inset:0;
+    background:var(--bg); flex-direction:column;
+    align-items:center; justify-content:center; gap:12px; z-index:20;
+  }
+  #camError.show { display:flex; }
+
+  /* ─── Panel Right ─────────────────────────────────────── */
+  .panel-right {
+    background: var(--surface); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* Output box */
+  .output-box {
+    flex: 1; overflow-y: auto; padding: 18px;
+    font-size: 1.5rem; font-weight: 700; line-height: 1.6;
+    word-break: break-word;
+  }
+  .output-placeholder {
+    font-size: 0.875rem; font-weight: 400;
+    color: var(--text3); font-style: italic;
+  }
+  .word-token {
+    display: inline-block; margin: 3px 5px 3px 0;
+    padding: 4px 14px;
+    background: #f4f4f2;
+    border: 1px solid #dcdcd9;
+    border-radius: 6px; font-size: 1.35rem; font-weight: 700;
+    color: #141414; animation: wordPop 0.25s ease-out forwards;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+
+  /* Action buttons */
+  .action-bar {
+    display: flex; gap: 6px; padding: 12px 14px;
+    border-top: 1px solid var(--border); flex-wrap: wrap;
+    background: #ffffff;
+  }
+  .act-btn {
+    flex: 1; min-width: 58px;
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    padding: 8px 6px; border-radius: var(--radius);
+    border: 1px solid var(--border); background: #ffffff;
+    color: var(--text2); font-size: 0.72rem; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: all 0.15s;
+  }
+  .act-btn i { font-size: 15px; }
+  .act-btn:hover { background: var(--surface2); border-color: var(--border2); color: var(--text); }
+  .act-btn.active-tts { background: #141414; border-color: #141414; color: #ffffff; }
+  .act-btn.danger:hover { background: var(--red-d); border-color: rgba(185,28,28,0.3); color: var(--red); }
+
+  /* Detection log */
+  .log-area {
+    height: 150px; flex-shrink: 0; overflow-y: auto;
+    border-top: 1px solid var(--border); padding: 8px 14px;
+    font-size: 0.75rem; font-family: monospace;
+  }
+  .log-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0; border-bottom: 1px solid var(--border);
+    color: var(--text2); animation: fadeIn 0.2s ease-out;
+  }
+  .log-row:last-child { border-bottom: none; }
+  .log-word { color: var(--accent); font-weight: 700; }
+  .log-conf { color: var(--green); font-size: 0.7rem; }
+  .log-sys  { color: var(--text3); font-style: italic; }
+
+  /* Live session stats */
+  .live-stat { font-size:0.75rem; color:var(--text3); }
+  .live-stat span { color:var(--text); font-weight:600; }
+
+  /* Confidence display */
+  .conf-val { font-size:0.9rem; font-weight:700; color:var(--accent); }
+
+  /* Snack notification */
+  .snack {
+    position:fixed; bottom:20px; left:50%;
+    transform:translateX(-50%) translateY(60px);
+    background:var(--surface2); border:1px solid var(--border2);
+    border-radius:var(--radius); padding:8px 18px;
+    font-size:0.83rem; font-weight:500; z-index:999;
+    transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    white-space:nowrap; pointer-events:none;
+  }
+  .snack.show { transform:translateX(-50%) translateY(0); }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- Top bar -->
+<div class="tbar">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm" style="padding:4px 10px;">
+    <i class="fa-solid fa-arrow-left"></i> Dashboard
+  </a>
+  <div class="tbar-sep"></div>
+  <div style="display:flex;align-items:center;gap:6px;">
+    <div class="dot-live"></div>
+    <span style="color:var(--green);font-weight:600;">LIVE</span>
+  </div>
+  <div class="tbar-sep"></div>
+  <span style="color:var(--text3);">Sesi <strong style="color:var(--text);">#{{ session_id }}</strong></span>
+  <div class="tbar-sep"></div>
+  <span class="live-stat">Kata: <span id="liveWords">0</span></span>
+  <span class="live-stat" style="margin-left:8px;">Waktu: <span id="liveTime">00:00</span></span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+    <a href="{{ url_for('dictionary') }}" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-book-open"></i> Kamus
+    </a>
+  </div>
+</div>
+
+<!-- Workspace -->
+<div class="workspace">
+
+  <!-- LEFT PANEL -->
+  <div class="panel-left">
+
+    <!-- Model Controls -->
+    <div class="p-section">
+      <div class="p-section-title">Kontrol Deteksi</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label"><i class="fa-solid fa-robot"></i> Deteksi AI</span>
+        <label class="toggle">
+          <input type="checkbox" id="togDetect" checked onchange="setSetting('detect',this.checked)" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label"><i class="fa-solid fa-hand-dots"></i> Kerangka Jari</span>
+        <label class="toggle">
+          <input type="checkbox" id="togMP" checked onchange="setSetting('mediaPipe',this.checked)" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label"><i class="fa-solid fa-left-right"></i> Balik Kamera</span>
+        <label class="toggle">
+          <input type="checkbox" id="togFlip" checked onchange="setSetting('flipH',this.checked)" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <div class="ctrl-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding-top:12px;border-top:1px solid var(--border);">
+        <span class="ctrl-label"><i class="fa-solid fa-microchip"></i> Mode Deteksi AI</span>
+        <select class="input" style="padding:6px 10px;font-size:0.78rem;width:100%;background:var(--surface2);border-radius:6px;" id="selEngine" onchange="setSetting('engine', this.value)">
+          <option value="hybrid" selected>🌟 Mode Cerdas (Alfabet Video + Kata)</option>
+          <option value="hf">🤖 Mode Video YouTube (Hugging Face)</option>
+          <option value="yolo">🎯 Mode YOLOv8 BISINDO</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Auto TTS -->
+    <div class="p-section">
+      <div class="p-section-title">Suara Otomatis</div>
+      <div class="ctrl-row">
+        <span class="ctrl-label"><i class="fa-solid fa-volume-high"></i> Baca Saat Terdeteksi</span>
+        <label class="toggle">
+          <input type="checkbox" id="togAutoTTS" onchange="autoTTS=this.checked; updateTTSBtn();" />
+          <div class="toggle-track"></div>
+        </label>
+      </div>
+      <p style="font-size:0.75rem;color:var(--text3);line-height:1.5;margin-top:4px;">
+        Setiap kata yang berhasil dideteksi akan langsung dibacakan oleh browser.
+      </p>
+    </div>
+
+    <!-- Confidence -->
+    <div class="p-section">
+      <div class="p-section-title">Kepercayaan AI</div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.8rem;color:var(--text2);">Threshold</span>
+        <span class="conf-val" id="confVal">10%</span>
+      </div>
+      <input type="range" class="conf-slider" id="confSlider" min="5" max="90" value="10"
+             oninput="updateConf(this.value)" />
+      <div style="display:flex;justify-content:space-between;font-size:0.7rem;color:var(--text3);margin-top:4px;">
+        <span>Cepat</span><span>Akurat</span>
+      </div>
+    </div>
+
+    <!-- Algorithm info -->
+    <div class="p-section">
+      <div class="p-section-title">Algoritma</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <span style="font-size:0.78rem;color:var(--text2);"><i class="fa-solid fa-check text-accent" style="margin-right:6px;font-size:11px;"></i>Smoothing Buffer 5-frame</span>
+        <span style="font-size:0.78rem;color:var(--text2);"><i class="fa-solid fa-check text-accent" style="margin-right:6px;font-size:11px;"></i>Majority Voting (3/5)</span>
+        <span style="font-size:0.78rem;color:var(--text2);"><i class="fa-solid fa-check text-accent" style="margin-right:6px;font-size:11px;"></i>Anti-duplikat filter</span>
+        <span style="font-size:0.78rem;color:var(--text2);"><i class="fa-solid fa-check text-accent" style="margin-right:6px;font-size:11px;"></i>Auto-save ke database</span>
+      </div>
+    </div>
+
+    <!-- Session live stats -->
+    <div class="p-section" style="margin-top:auto;">
+      <div class="p-section-title">Sesi Ini</div>
+      <div style="display:flex;justify-content:space-between;font-size:0.83rem;margin-bottom:6px;">
+        <span style="color:var(--text2);">Kata terdeteksi</span>
+        <strong id="sideWords">0</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:0.83rem;">
+        <span style="color:var(--text2);">Frame diproses</span>
+        <strong id="sideFrames" style="color:var(--text2);">0</strong>
+      </div>
+    </div>
+  </div>
+
+  <!-- CAMERA PANEL -->
+  <div class="camera-panel">
+    <img id="videoElement"
+         src="{{ url_for('video_feed', session_id=session_id) }}"
+         alt="Memuat kamera..."
+         onerror="showCamErr()" />
+
+    <!-- Corners -->
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+    <!-- HUD top -->
+    <div class="cam-hud-top">
+      <div style="display:flex;align-items:center;gap:7px;">
+        <div class="dot-live"></div>
+        <span style="font-size:0.75rem;font-weight:600;color:var(--green);">REC</span>
+      </div>
+      <span id="camClock" style="font-size:0.75rem;color:rgba(255,255,255,0.4);font-family:monospace;"></span>
+    </div>
+
+    <!-- Detected word chip -->
+    <div class="det-chip" id="detChip"></div>
+
+    <!-- HUD bottom -->
+    <div class="cam-hud-bot">
+      <span style="font-size:0.72rem;color:rgba(255,255,255,0.7);"><i class="fa-solid fa-microchip text-accent"></i> <span id="hudEngineName">Vision AI + MediaPipe 3D</span></span>
+      <span id="camStatus" style="font-size:0.72rem;color:var(--green);"><i class="fa-solid fa-hand"></i> ● Kerangka Aktif</span>
+    </div>
+
+    <!-- Error state -->
+    <div id="camError">
+      <div style="font-size:3rem;">📷</div>
+      <i class="fa-solid fa-video-slash" style="font-size:2.5rem;color:var(--text3);margin-bottom:8px;"></i>
+      <p style="color:var(--text2);font-weight:600;">Kamera tidak tersedia</p>
+      <p style="color:var(--text3);font-size:0.85rem;">Pastikan kamera terhubung dan izin diberikan</p>
+      <button class="btn btn-primary btn-sm" onclick="reloadCam()" style="margin-top:8px;">
+        <i class="fa-solid fa-rotate-right"></i> Coba Ulang
+      </button>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="panel-right">
+    <div class="p-section" style="padding:14px 16px;">
+      <div class="p-section-title">Hasil Terjemahan</div>
+    </div>
+
+    <!-- Output -->
+    <div class="output-box" id="outputBox">
+      <span class="output-placeholder" id="outputPH">
+        Arahkan tangan ke kamera dan mulai berisyarat...
+      </span>
+    </div>
+
+    <!-- Quick Composer Bar -->
+    <div style="display:flex; gap:4px; padding:6px 12px; background:var(--surface2); border-top:1px solid var(--border); overflow-x:auto;">
+      <button class="btn btn-ghost btn-sm" onclick="insertPunct(' ')" style="padding:4px 8px;font-size:0.75rem;" title="Tambah Spasi">
+        <i class="fa-solid fa-arrows-left-right"></i> Spasi
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="removeLastWord()" style="padding:4px 8px;font-size:0.75rem;" title="Hapus Kata Terakhir">
+        <i class="fa-solid fa-delete-left"></i> Hapus Kata
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="insertPunct('. ')" style="padding:4px 10px;font-size:0.8rem;font-weight:700;" title="Tanda Titik">
+        .
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="insertPunct('? ')" style="padding:4px 10px;font-size:0.8rem;font-weight:700;" title="Tanda Tanya">
+        ?
+      </button>
+      <a href="{{ url_for('dialog') }}" class="btn btn-ghost btn-sm" style="margin-left:auto;padding:4px 8px;font-size:0.75rem;color:var(--accent);" title="Buka Mode Percakapan 2 Arah">
+        <i class="fa-solid fa-comments"></i> Dialog 2 Arah
+      </a>
+    </div>
+
+    <!-- Actions -->
+    <div class="action-bar">
+      <button class="act-btn active-tts" id="btnTTS" onclick="doTTS()" title="Baca teks">
+        <i class="fa-solid fa-volume-high"></i>Baca
+      </button>
+      <button class="act-btn" id="btnAutoTTSToggle" onclick="toggleAutoTTS()" title="Suara otomatis">
+        <i class="fa-solid fa-microphone-lines"></i>Auto
+      </button>
+      <button class="act-btn" onclick="doCopy()" title="Salin teks">
+        <i class="fa-solid fa-copy"></i>Salin
+      </button>
+      <button class="act-btn" onclick="doSave()" title="Simpan sesi">
+        <i class="fa-solid fa-floppy-disk"></i>Simpan
+      </button>
+      <button class="act-btn danger" onclick="doClear()" title="Hapus output">
+        <i class="fa-solid fa-trash"></i>Hapus
+      </button>
+    </div>
+
+    <!-- Log -->
+    <div class="p-section" style="padding:8px 14px 6px;border-top:1px solid var(--border);border-bottom:none;">
+      <div class="p-section-title" style="margin-bottom:0;">Log Deteksi</div>
+    </div>
+    <div class="log-area" id="logArea">
+      <div class="log-row"><span class="log-sys">» Sistem siap — menunggu input...</span></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Save Session Modal -->
+<div class="modal-overlay" id="saveModal" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(0,0,0,0.75);backdrop-filter:blur(4px);align-items:center;justify-content:center;padding:20px;">
+  <div class="modal-box" style="padding:28px;text-align:center;max-width:440px;background:var(--surface);border:1px solid var(--border);border-radius:16px;">
+    <div style="width:52px;height:52px;border-radius:50%;background:var(--green-d);color:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px;">
+      <i class="fa-solid fa-circle-check"></i>
+    </div>
+    <h3 style="font-size:1.25rem;font-weight:700;margin-bottom:6px;">Sesi Terjemahan Tersimpan!</h3>
+    <p style="color:var(--text2);font-size:0.85rem;margin-bottom:18px;">
+      Hasil terjemahan dan riwayat kata telah disimpan ke database MySQL.
+    </p>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;text-align:left;margin-bottom:20px;font-size:0.85rem;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:var(--text3);">Nomor Sesi:</span>
+        <strong>#{{ session_id }}</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
+        <span style="color:var(--text3);">Total Kata:</span>
+        <strong id="modalWordCount">0</strong>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+        <span style="color:var(--text3);">Durasi:</span>
+        <strong id="modalDuration">00:00</strong>
+      </div>
+      <div style="border-top:1px solid var(--border);padding-top:8px;">
+        <span style="color:var(--text3);display:block;font-size:0.75rem;margin-bottom:2px;">Teks Lengkap:</span>
+        <div id="modalSummaryText" style="font-weight:600;color:var(--text);word-break:break-word;max-height:80px;overflow-y:auto;">—</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;">
+      <a href="{{ url_for('history') }}" class="btn btn-ghost" style="flex:1;justify-content:center;text-decoration:none;">
+        <i class="fa-solid fa-clock-rotate-left"></i> Riwayat
+      </a>
+      <a href="{{ url_for('dashboard') }}" class="btn btn-primary" style="flex:1;justify-content:center;text-decoration:none;">
+        <i class="fa-solid fa-house"></i> Dashboard
+      </a>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="closeSaveModal()" style="margin-top:10px;width:100%;">
+      Lanjutkan Sesi Ini
+    </button>
+  </div>
+</div>
+
+<!-- Snack notification -->
+<div class="snack" id="snack"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+const SESSION_ID = {{ session_id }};
+
+// ── State ──────────────────────────────────────────────────
+let finalText  = '';
+let wordCount  = 0;
+let frameCount = 0;
+let startTime  = Date.now();
+let autoTTS    = false;
+
+// ── Socket ─────────────────────────────────────────────────
+const socket = io(location.protocol + '//' + document.domain + ':' + location.port,
+  { transports: ['websocket', 'polling'] });
+
+socket.on('connect', () => addLog('sys', 'Socket terhubung ✓'));
+socket.on('disconnect', () => addLog('sys', 'Socket terputus...'));
+
+socket.on('detection', data => {
+  frameCount++;
+  document.getElementById('sideFrames').textContent = frameCount;
+  handleDetection(data.word, data.confidence);
+});
+
+// ── Detection Handler ──────────────────────────────────────
+function handleDetection(word, conf) {
+  showChip(word, conf);
+  appendWord(word);
+  addLog('det', word, conf);
+
+  // Auto TTS — speak word immediately if enabled
+  if (autoTTS) speakWord(word);
+}
+
+function appendWord(word) {
+  const box = document.getElementById('outputBox');
+  const ph  = document.getElementById('outputPH');
+  if (ph) ph.remove();
+
+  finalText += (finalText ? ' ' : '') + word;
+  wordCount++;
+  document.getElementById('liveWords').textContent   = wordCount;
+  document.getElementById('sideWords').textContent   = wordCount;
+
+  const tok = document.createElement('span');
+  tok.className   = 'word-token';
+  tok.textContent = word;
+  box.appendChild(tok);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── TTS ────────────────────────────────────────────────────
+function speakWord(word) {
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang  = 'id-ID';
+  u.rate  = 0.88;
+  u.pitch = 1.0;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function doTTS() {
+  if (!finalText.trim()) { showSnack('Belum ada teks'); return; }
+  const u = new SpeechSynthesisUtterance(finalText);
+  u.lang  = 'id-ID';
+  u.rate  = 0.88;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+  showSnack('Membacakan teks... 🔊');
+}
+
+function toggleAutoTTS() {
+  autoTTS = !autoTTS;
+  document.getElementById('togAutoTTS').checked = autoTTS;
+  updateTTSBtn();
+  showSnack(autoTTS ? 'Suara otomatis ON 🔊' : 'Suara otomatis OFF');
+}
+
+function updateTTSBtn() {
+  const btn = document.getElementById('btnAutoTTSToggle');
+  btn.className = 'act-btn' + (autoTTS ? ' active-tts' : '');
+}
+
+// ── Camera Chip ────────────────────────────────────────────
+let chipTimer;
+function showChip(word, conf) {
+  const el = document.getElementById('detChip');
+  const clean = (word || '').toUpperCase().trim();
+  const photoFile = (clean.length === 1 && clean >= 'A' && clean <= 'Z') ? (clean + '.jpg') : '';
+
+  if (photoFile) {
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:12px;">
+        <img src="/static/img/signs/${photoFile}" style="height:52px;width:auto;object-fit:contain;background:#fff;border-radius:6px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.1));" alt="Huruf ${clean}" onerror="this.remove();" />
+        <div style="text-align:left;">
+          <div style="font-size:1.3rem;font-weight:800;line-height:1.1;color:#141414;">Huruf ${clean}</div>
+          <div style="font-size:0.75rem;color:var(--text2);font-weight:600;margin-top:2px;">${conf}% Cocok</div>
+        </div>
+      </div>
+    `;
+  } else {
+    el.textContent = word + ' · ' + conf + '%';
+  }
+  el.className   = 'det-chip show';
+  clearTimeout(chipTimer);
+  chipTimer = setTimeout(() => { el.className = 'det-chip'; }, 1500);
+}
+
+// ── Log ────────────────────────────────────────────────────
+function addLog(type, word, conf) {
+  const area = document.getElementById('logArea');
+  const row  = document.createElement('div');
+  row.className = 'log-row';
+  const ts = new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  if (type === 'sys') {
+    row.innerHTML = `<span class="log-sys">» ${word}</span><span style="color:var(--text3);">${ts}</span>`;
+  } else {
+    row.innerHTML = `<span>detect: <span class="log-word">${word}</span></span>
+                     <span class="log-conf">[${conf}%] ${ts}</span>`;
+  }
+  area.appendChild(row);
+  if (area.children.length > 60) area.removeChild(area.children[0]);
+  area.scrollTop = area.scrollHeight;
+}
+
+// ── Settings ───────────────────────────────────────────────
+let confDebounce;
+function setSetting(key, val) {
+  const payload = {}; payload[key] = val;
+  fetch('/api/settings', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+}
+
+function updateConf(val) {
+  document.getElementById('confVal').textContent = val + '%';
+  clearTimeout(confDebounce);
+  confDebounce = setTimeout(() => setSetting('confidence', parseFloat(val)), 300);
+}
+
+// ── Camera ─────────────────────────────────────────────────
+function showCamErr() {
+  document.getElementById('camError').classList.add('show');
+  document.getElementById('camStatus').innerHTML = '● Error';
+  document.getElementById('camStatus').style.color = 'var(--red)';
+}
+function reloadCam() {
+  const img = document.getElementById('videoElement');
+  img.src = `/video_feed?session_id=${SESSION_ID}&_t=${Date.now()}`;
+  document.getElementById('camError').classList.remove('show');
+}
+
+// ── Sentence Composition ────────────────────────────────────
+function insertPunct(p) {
+  if (!finalText) return;
+  finalText += p;
+  const box = document.getElementById('outputBox');
+  const span = document.createElement('span');
+  span.style.color = 'var(--text3)';
+  span.style.fontWeight = '400';
+  span.textContent = p;
+  box.appendChild(span);
+  box.scrollTop = box.scrollHeight;
+}
+
+function removeLastWord() {
+  let words = finalText.trim().split(/\s+/);
+  if (words.length <= 1) {
+    doClear();
+    return;
+  }
+  words.pop();
+  finalText = words.join(' ') + ' ';
+  wordCount = words.length;
+  document.getElementById('liveWords').textContent = wordCount;
+  document.getElementById('sideWords').textContent = wordCount;
+
+  const box = document.getElementById('outputBox');
+  box.innerHTML = '';
+  words.forEach(w => {
+    const tok = document.createElement('span');
+    tok.className = 'word-token';
+    tok.textContent = w;
+    box.appendChild(tok);
+  });
+  showSnack('Kata terakhir dihapus');
+}
+
+// ── Actions ────────────────────────────────────────────────
+function doCopy() {
+  if (!finalText.trim()) { showSnack('Belum ada teks'); return; }
+  navigator.clipboard.writeText(finalText).then(() => showSnack('Teks berhasil disalin 📋'));
+}
+
+function doSave() {
+  const saveText = finalText.trim() || '—';
+  fetch(`/api/session/${SESSION_ID}/save`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ text: saveText })
+  }).then(() => {
+    document.getElementById('modalWordCount').textContent = wordCount;
+    document.getElementById('modalDuration').textContent = document.getElementById('liveTime').textContent;
+    document.getElementById('modalSummaryText').textContent = saveText;
+    document.getElementById('saveModal').style.display = 'flex';
+  }).catch(() => {
+    showSnack('Gagal menyimpan sesi');
+  });
+}
+
+function closeSaveModal() {
+  document.getElementById('saveModal').style.display = 'none';
+}
+
+function doClear() {
+  finalText = ''; wordCount = 0; frameCount = 0;
+  document.getElementById('liveWords').textContent  = '0';
+  document.getElementById('sideWords').textContent  = '0';
+  document.getElementById('sideFrames').textContent = '0';
+  document.getElementById('outputBox').innerHTML =
+    '<span class="output-placeholder" id="outputPH">Arahkan tangan ke kamera dan mulai berisyarat...</span>';
+  document.getElementById('logArea').innerHTML =
+    '<div class="log-row"><span class="log-sys">» Log dibersihkan</span></div>';
+  showSnack('Output dibersihkan');
+}
+
+// ── Snack ──────────────────────────────────────────────────
+let snackTimer;
+function showSnack(msg) {
+  const el = document.getElementById('snack');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(snackTimer);
+  snackTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ── Clock & Timer ──────────────────────────────────────────
+setInterval(() => {
+  document.getElementById('camClock').textContent = new Date().toLocaleTimeString('id-ID');
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  document.getElementById('liveTime').textContent =
+    String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+}, 1000);
+
+// ── Auto-save on leave ─────────────────────────────────────
+window.addEventListener('beforeunload', () => {
+  if (finalText.trim()) {
+    const b = new Blob([JSON.stringify({text:finalText})], {type:'application/json'});
+    navigator.sendBeacon(`/api/session/${SESSION_ID}/save`, b);
+  }
+});
+</script>
+{% endblock %}

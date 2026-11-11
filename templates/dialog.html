@@ -1,0 +1,809 @@
+{% extends "base.html" %}
+
+{% block title %}Mode Dialog 2 Arah (Teman Tuli ↔ Teman Dengar) - SignLanguageTranslator{% endblock %}
+
+{% block extra_head %}
+<style>
+  :root {
+    --deaf-color: #141414;
+    --deaf-bg: #f4f4f2;
+    --hearing-color: #141414;
+    --hearing-bg: #ffffff;
+  }
+
+  .dialog-container {
+    max-width: 1400px;
+    margin: 20px auto;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Header banner */
+  .dialog-header {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .dialog-header h1 {
+    font-size: 1.3rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  .dialog-header p {
+    color: var(--text2);
+    font-size: 0.85rem;
+    margin-top: 4px;
+  }
+
+  /* Two Column Interactive Stage */
+  .dialog-stage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  @media (max-width: 960px) {
+    .dialog-stage { grid-template-columns: 1fr; }
+  }
+
+  /* Card Box */
+  .box-channel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .box-channel-head {
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.86rem;
+    font-weight: 700;
+    background: #ffffff;
+    letter-spacing: -0.01em;
+  }
+
+  /* Video wrapper */
+  .dialog-video-wrap {
+    position: relative;
+    background: #141414;
+    width: 100%;
+    aspect-ratio: 4/3;
+    max-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .dialog-video-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /* Video Overlay HUD */
+  .video-hud {
+    position: absolute;
+    top: 10px; left: 10px; right: 10px;
+    display: flex;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .hud-badge {
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Active Word Ribbon */
+  .active-word-ribbon {
+    position: absolute;
+    bottom: 14px; left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    border: 1px solid #141414;
+    color: #141414;
+    padding: 6px 18px;
+    border-radius: 99px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    display: none;
+  }
+
+  /* Channel Body */
+  .channel-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex: 1;
+    background: #ffffff;
+  }
+
+  /* Hand Sentence Buffer */
+  .sentence-buffer-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .sentence-buffer-text {
+    font-size: 1.15rem;
+    font-weight: 600;
+    min-height: 28px;
+    color: var(--text);
+    word-break: break-word;
+  }
+  .sentence-buffer-text.empty {
+    color: var(--text3);
+    font-weight: 400;
+    font-style: italic;
+  }
+
+  /* Action Buttons bar */
+  .btn-bar-small {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  /* Right Channel: Hearing Side (Voice & Text) */
+  .mic-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 16px;
+    background: var(--surface2);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    text-align: center;
+    gap: 12px;
+  }
+  .mic-button {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: #141414;
+    color: #fff;
+    font-size: 1.4rem;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .mic-button:hover { transform: scale(1.05); background: #262626; }
+  .mic-button.recording {
+    background: #b91c1c;
+    animation: micPulse 1.2s infinite;
+  }
+  @keyframes micPulse {
+    0% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0.4); }
+    70% { box-shadow: 0 0 0 14px rgba(185, 28, 28, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(185, 28, 28, 0); }
+  }
+
+  /* Sign Language Sequence Player */
+  .sign-player-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .sign-player-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .sign-cards-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+  .sign-card-pill {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    min-width: 72px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.2s;
+  }
+  .sign-card-pill.active {
+    border-color: #141414;
+    background: #141414;
+    color: #ffffff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+  }
+  .sign-card-pill.active .sign-card-letter {
+    color: #ffffff;
+  }
+  .sign-card-letter {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--text);
+    margin-top: 4px;
+  }
+  .sign-card-photo {
+    width: 48px;
+    height: 48px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: #fff;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.06));
+  }
+
+  /* Chat Logs Timeline */
+  .dialog-chat-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    box-shadow: var(--shadow-sm);
+  }
+  .chat-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding-right: 6px;
+  }
+  .chat-bubble {
+    display: flex;
+    flex-direction: column;
+    max-width: 80%;
+    padding: 11px 16px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .chat-bubble.deaf {
+    align-self: flex-start;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-bottom-left-radius: 2px;
+  }
+  .chat-bubble.hearing {
+    align-self: flex-end;
+    background: #ffffff;
+    border: 1px solid var(--border2);
+    border-bottom-right-radius: 2px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  }
+  .bubble-meta {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text3);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dialog-container fade-in">
+
+  <!-- Header -->
+  <div class="dialog-header">
+    <div>
+      <h1>
+        <i class="fa-solid fa-comments" style="color:var(--accent);"></i>
+        Mode Dialog 2 Arah
+      </h1>
+      <p>
+        Jembatan percakapan Teman Tuli (Isyarat ke Suara) &amp; Teman Dengar (Suara/Teks ke Visual Isyarat).
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <a href="{{ url_for('translate') }}" class="btn btn-ghost btn-sm">
+        <i class="fa-solid fa-camera"></i> Mode Kamera Biasa
+      </a>
+      <button class="btn btn-ghost btn-sm" onclick="exportChat()">
+        <i class="fa-solid fa-download"></i> Ekspor Obrolan
+      </button>
+    </div>
+  </div>
+
+  <!-- Stage: 2 Channels -->
+  <div class="dialog-stage">
+
+    <!-- CHANNEL 1: TEMAN TULI (Sign -> Voice & Text) -->
+    <div class="box-channel" style="border-top: 3px solid var(--deaf-color);">
+      <div class="box-channel-head" style="background:var(--deaf-bg);">
+        <span style="color:var(--deaf-color);display:flex;align-items:center;gap:6px;">
+          <i class="fa-solid fa-hand-sparkles"></i> Teman Tuli (Input Isyarat Tangan)
+        </span>
+        <span style="font-size:0.75rem;color:var(--text3);">Kamera Aktif</span>
+      </div>
+
+      <div class="dialog-video-wrap">
+        <img src="{{ url_for('video_feed', session_id=session_id) }}" alt="Camera Feed" />
+        <div class="video-hud">
+          <div class="hud-badge"><div style="width:7px;height:7px;border-radius:50%;background:#ef4444;animation:pulse 1s infinite;"></div> LIVE AI</div>
+          <div class="hud-badge" id="hudEngine">Vision Transformer</div>
+        </div>
+        <div class="active-word-ribbon" id="activeRibbon">A</div>
+      </div>
+
+      <div class="channel-body">
+        <div>
+          <span style="font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;">Kalimat dari Isyarat:</span>
+          <div class="sentence-buffer-box" style="margin-top:6px;">
+            <div class="sentence-buffer-text empty" id="deafSentence">Menunggu isyarat tangan...</div>
+          </div>
+        </div>
+
+        <div class="btn-bar-small">
+          <button class="btn btn-primary btn-sm" style="background:var(--deaf-color);border:none;" onclick="sendDeafMessage()">
+            <i class="fa-solid fa-paper-plane"></i> Kirim ke Teman Dengar &amp; Suarakan
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="addSpaceToDeaf()">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Spasi
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="backspaceDeaf()">
+            <i class="fa-solid fa-delete-left"></i> Hapus
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="clearDeafSentence()">
+            <i class="fa-solid fa-trash"></i> Bersihkan
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CHANNEL 2: TEMAN DENGAR (Voice/Text -> Visual Sign Cards) -->
+    <div class="box-channel" style="border-top: 3px solid var(--hearing-color);">
+      <div class="box-channel-head" style="background:var(--hearing-bg);">
+        <span style="color:var(--hearing-color);display:flex;align-items:center;gap:6px;">
+          <i class="fa-solid fa-ear-listen"></i> Teman Dengar (Input Suara / Ketik Teks)
+        </span>
+        <span style="font-size:0.75rem;color:var(--text3);">Speech-to-Sign</span>
+      </div>
+
+      <div class="channel-body" style="justify-content:space-between;">
+        <!-- Mic section -->
+        <div class="mic-section">
+          <button class="mic-button" id="btnMic" onclick="toggleSpeechRecognition()">
+            <i class="fa-solid fa-microphone"></i>
+          </button>
+          <div>
+            <div style="font-weight:700;font-size:0.95rem;color:var(--text);" id="micStatusText">Klik Mikrofon untuk Berbicara</div>
+            <div style="font-size:0.75rem;color:var(--text3);margin-top:2px;">Bicara dengan bahasa Indonesia normal</div>
+          </div>
+        </div>
+
+        <!-- Quick text input fallback -->
+        <div style="display:flex;gap:8px;">
+          <input type="text" class="input" id="hearingInput" placeholder="Atau ketik pesan di sini (misal: Halo apa kabar)..." onkeydown="if(event.key==='Enter') sendHearingMessage()" />
+          <button class="btn btn-primary btn-sm" style="background:var(--hearing-color);border:none;" onclick="sendHearingMessage()">
+            <i class="fa-solid fa-paper-plane"></i> Kirim
+          </button>
+        </div>
+
+        <!-- Visual Sign Sequence Card -->
+        <div class="sign-player-card">
+          <div class="sign-player-title">
+            <span><i class="fa-solid fa-hands-asl-interpreting"></i> Visual Gerakan Isyarat BISINDO:</span>
+            <span id="playerWordCount">0 Gerakan</span>
+          </div>
+          <div class="sign-cards-row" id="signCardsRow">
+            <div style="color:var(--text3);font-size:0.8rem;padding:12px;font-style:italic;">
+              Bicara atau ketik pesan di atas untuk melihat animasi isyaratnya di sini.
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+            <button class="btn btn-ghost btn-sm" onclick="playSequence()"><i class="fa-solid fa-play"></i> Putar Ulang</button>
+            <span style="font-size:0.72rem;color:var(--text3);margin-left:auto;">Teman Tuli bisa melihat panduan gerakan di atas</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Real-time Dialog Chat Log -->
+  <div class="dialog-chat-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);padding-bottom:10px;">
+      <span style="font-size:0.88rem;font-weight:700;display:flex;align-items:center;gap:6px;">
+        <i class="fa-solid fa-clock-rotate-left" style="color:var(--accent);"></i>
+        Riwayat Dialog Percakapan
+      </span>
+      <span style="font-size:0.75rem;color:var(--text3);" id="chatCount">0 Pesan</span>
+    </div>
+    <div class="chat-timeline" id="chatTimeline">
+      <div style="color:var(--text3);font-size:0.82rem;text-align:center;padding:20px;font-style:italic;" id="emptyChatNotice">
+        Belum ada percakapan. Mulai dengan membuat isyarat tangan atau berbicara lewat mikrofon.
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script>
+// ============================================================
+// SIGN DICTIONARY DATA FOR VISUALIZER
+// ============================================================
+const SIGN_DATA = {
+  'A': '✊', 'B': '🖐️', 'C': '🤏', 'D': '☝️', 'E': '🤙',
+  'F': '👌', 'G': '👉', 'H': '👉', 'I': '🤙', 'J': '🤙',
+  'K': '✌️', 'L': '👆', 'M': '✊', 'N': '✊', 'O': '👌',
+  'P': '👉', 'Q': '👇', 'R': '🤞', 'S': '✊', 'T': '✊',
+  'U': '✌️', 'V': '✌️', 'W': '🖐️', 'X': '☝️', 'Y': '🤙', 'Z': '☝️'
+};
+
+// State
+let deafBuffer = "";
+let chatMessages = [];
+let isRecording = false;
+let recognition = null;
+let activeSequence = [];
+
+// Socket.io for Real-Time Camera Detection
+const socket = io(location.protocol + '//' + document.domain + ':' + location.port,
+  { transports: ['websocket', 'polling'] });
+
+socket.on('live_detection', data => {
+  if (!data || !data.word) return;
+  const rib = document.getElementById('activeRibbon');
+  if (rib) {
+    rib.textContent = `${data.word} (${Math.round(data.confidence)}%)`;
+    rib.style.display = 'block';
+    clearTimeout(rib._t);
+    rib._t = setTimeout(() => { rib.style.display = 'none'; }, 1000);
+  }
+});
+
+socket.on('detection', data => {
+  if (!data || !data.word) return;
+  const word = String(data.word).trim();
+  
+  // Flash Ribbon
+  const rib = document.getElementById('activeRibbon');
+  if (rib) {
+    rib.textContent = `${word} (${Math.round(data.confidence)}%)`;
+    rib.style.display = 'block';
+    clearTimeout(rib._t);
+    rib._t = setTimeout(() => { rib.style.display = 'none'; }, 1000);
+  }
+
+  // Append word or letter to deaf buffer
+  if (word.length === 1) {
+    deafBuffer += word;
+  } else {
+    deafBuffer += (deafBuffer.length > 0 && !deafBuffer.endsWith(" ") ? " " : "") + word + " ";
+  }
+  updateDeafBufferDisplay();
+});
+
+function updateDeafBufferDisplay() {
+  const el = document.getElementById('deafSentence');
+  if (!deafBuffer.trim()) {
+    el.textContent = "Menunggu isyarat tangan...";
+    el.classList.add('empty');
+  } else {
+    el.textContent = deafBuffer;
+    el.classList.remove('empty');
+  }
+}
+
+function addSpaceToDeaf() {
+  if (deafBuffer && !deafBuffer.endsWith(" ")) {
+    deafBuffer += " ";
+    updateDeafBufferDisplay();
+  }
+}
+
+function backspaceDeaf() {
+  deafBuffer = deafBuffer.slice(0, -1);
+  updateDeafBufferDisplay();
+}
+
+function clearDeafSentence() {
+  deafBuffer = "";
+  updateDeafBufferDisplay();
+}
+
+function sendDeafMessage() {
+  const text = deafBuffer.trim();
+  if (!text) return;
+
+  // Add to Chat
+  addChatMessage('deaf', text);
+
+  // Speak out aloud for Hearing Friend
+  speakText(text);
+
+  // Render visualizer cards
+  renderSignSequence(text);
+
+  // Clear buffer
+  deafBuffer = "";
+  updateDeafBufferDisplay();
+}
+
+// Hearing Channel — Send
+function sendHearingMessage() {
+  const inp = document.getElementById('hearingInput');
+  const text = inp.value.trim();
+  if (!text) return;
+
+  addChatMessage('hearing', text);
+  renderSignSequence(text);
+  inp.value = "";
+}
+
+// Add Chat Message
+function addChatMessage(sender, text) {
+  const notice = document.getElementById('emptyChatNotice');
+  if (notice) notice.style.display = 'none';
+
+  const time = new Date().toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' });
+  const timeline = document.getElementById('chatTimeline');
+
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${sender}`;
+
+  const isDeaf = sender === 'deaf';
+  bubble.innerHTML = `
+    <div class="bubble-meta ${sender}">
+      <i class="fa-solid ${isDeaf ? 'fa-hand-sparkles' : 'fa-ear-listen'}"></i>
+      ${isDeaf ? 'Teman Tuli (Isyarat)' : 'Teman Dengar (Suara/Teks)'} &bull; ${time}
+    </div>
+    <div style="color:var(--text);font-weight:500;">${escapeHtml(text)}</div>
+  `;
+
+  timeline.appendChild(bubble);
+  timeline.scrollTop = timeline.scrollHeight;
+
+  chatMessages.push({ sender, text, time });
+  document.getElementById('chatCount').textContent = `${chatMessages.length} Pesan`;
+}
+
+// Sign Sequence Visualizer (A–Z Alphabet Only)
+function renderSignSequence(text) {
+  const row = document.getElementById('signCardsRow');
+  row.innerHTML = "";
+  activeSequence = [];
+
+  const clean = text.toUpperCase().trim();
+  for (const ch of clean) {
+    if (ch >= 'A' && ch <= 'Z') {
+      activeSequence.push({ label: ch, emoji: SIGN_DATA[ch] || '✋' });
+    }
+  }
+
+  if (!activeSequence.length) {
+    row.innerHTML = `<div style="color:var(--text3);font-size:0.8rem;padding:12px;">Tidak ada huruf isyarat untuk ditampilkan.</div>`;
+    return;
+  }
+
+  document.getElementById('playerWordCount').textContent = `${activeSequence.length} Huruf`;
+
+  activeSequence.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.className = 'sign-card-pill';
+    card.id = `signPill_${idx}`;
+    const cleanLabel = item.label.toUpperCase();
+    const photoFile = cleanLabel + '.jpg';
+    card.innerHTML = `
+      <img src="/static/img/signs/${photoFile}" alt="Huruf ${item.label}" class="sign-card-photo" onerror="this.onerror=null; this.src='/static/img/signs/A.jpg';" />
+      <div class="sign-card-letter">${item.label}</div>
+    `;
+    row.appendChild(card);
+  });
+
+  playSequence();
+}
+
+// Play through sequence
+function playSequence() {
+  if (!activeSequence.length) return;
+  let idx = 0;
+  const interval = setInterval(() => {
+    document.querySelectorAll('.sign-card-pill').forEach(c => c.classList.remove('active'));
+    const curr = document.getElementById(`signPill_${idx}`);
+    if (curr) {
+      curr.classList.add('active');
+      curr.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    idx++;
+    if (idx >= activeSequence.length) {
+      clearInterval(interval);
+      setTimeout(() => {
+        document.querySelectorAll('.sign-card-pill').forEach(c => c.classList.remove('active'));
+      }, 1200);
+    }
+  }, 700);
+}
+
+// Speech Recognition for Hearing Friend
+function initSpeechRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Browser Anda belum mendukung Web Speech Recognition. Silakan gunakan Google Chrome atau Microsoft Edge.");
+    return null;
+  }
+  const rec = new SpeechRecognition();
+  rec.lang = 'id-ID';
+  rec.continuous = false;
+  rec.interimResults = false;
+
+  rec.onstart = () => {
+    isRecording = true;
+    document.getElementById('btnMic').classList.add('recording');
+    document.getElementById('micStatusText').textContent = "Mendengarkan suara... Silakan bicara.";
+  };
+
+  rec.onresult = (evt) => {
+    const transcript = evt.results[0][0].transcript;
+    document.getElementById('hearingInput').value = transcript;
+    sendHearingMessage();
+  };
+
+  rec.onerror = (evt) => {
+    console.error("Speech Recognition Error:", evt.error);
+    stopRecording();
+    let msg = "Terjadi kendala pada mikrofon.";
+    if (evt.error === 'not-allowed' || evt.error === 'service-not-allowed') {
+      msg = "Izin mikrofon diblokir! Klik ikon gembok di sebelah kiri address bar browser dan pilih 'Izinkan' (Allow) untuk Mikrofon.";
+      alert(msg);
+    } else if (evt.error === 'no-speech') {
+      msg = "Tidak ada suara terdeteksi. Silakan coba bicara lagi lebih dekat ke mikrofon.";
+    } else if (evt.error === 'audio-capture') {
+      msg = "Mikrofon fisik tidak terdeteksi atau sedang dikunci aplikasi lain.";
+      alert(msg);
+    } else if (evt.error === 'network') {
+      msg = "Layanan speech recognition membutuhkan koneksi internet aktif. Periksa koneksi Anda.";
+      alert(msg);
+    }
+    document.getElementById('micStatusText').textContent = msg;
+  };
+
+  rec.onend = () => {
+    stopRecording();
+  };
+
+  return rec;
+}
+
+async function toggleSpeechRecognition() {
+  // Check secure context for microphone usage
+  if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+    const warn = "Fitur Mikrofon memerlukan konteks aman (localhost atau HTTPS). Silakan buka aplikasi melalui http://127.0.0.1:5002 atau http://localhost:5002.";
+    alert(warn);
+    document.getElementById('micStatusText').textContent = warn;
+    return;
+  }
+
+  // Request browser microphone permission explicitly if available
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !window._micPermissionOk) {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      window._micPermissionOk = true;
+      stream.getTracks().forEach(t => t.stop());
+    } catch(err) {
+      console.warn("Microphone access denied:", err);
+      let errMsg = "Akses mikrofon ditolak.";
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errMsg = "Izin mikrofon diblokir! Klik ikon gembok di sebelah address bar dan izinkan Mikrofon.";
+      } else if (err.name === 'NotFoundError') {
+        errMsg = "Perangkat mikrofon fisik tidak ditemukan pada perangkat Anda.";
+      }
+      alert(errMsg);
+      document.getElementById('micStatusText').textContent = errMsg;
+      return;
+    }
+  }
+
+  if (!recognition) recognition = initSpeechRecognition();
+  if (!recognition) return;
+
+  if (isRecording) {
+    recognition.stop();
+    stopRecording();
+  } else {
+    try {
+      recognition.start();
+    } catch(err) {
+      console.error("Recognition start error:", err);
+      stopRecording();
+    }
+  }
+}
+
+function stopRecording() {
+  isRecording = false;
+  document.getElementById('btnMic').classList.remove('recording');
+  document.getElementById('micStatusText').textContent = "Klik Mikrofon untuk Berbicara";
+}
+
+// Text to Speech
+function speakText(txt) {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(txt);
+  u.lang = 'id-ID';
+  u.rate = 0.95;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+// Export Chat Log
+function exportChat() {
+  if (!chatMessages.length) {
+    alert("Belum ada obrolan untuk diekspor.");
+    return;
+  }
+  let out = "=== RIWAYAT PERCAKAPAN DIALOG 2 ARAH (BISINDO) ===\n";
+  out += `Tanggal: ${new Date().toLocaleString('id-ID')}\n\n`;
+  chatMessages.forEach(m => {
+    const who = m.sender === 'deaf' ? 'Teman Tuli (Isyarat)' : 'Teman Dengar (Suara/Teks)';
+    out += `[${m.time}] ${who}: ${m.text}\n`;
+  });
+  const blob = new Blob([out], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `dialog_percakapan_${Date.now()}.txt`;
+  a.click();
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+</script>
+{% endblock %}
+

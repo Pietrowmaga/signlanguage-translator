@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}SignLanguageTranslator — Penerjemah Bahasa Isyarat Real-Time{% endblock %}
+
+{% block extra_head %}
+<style>
+  .hero { max-width: 700px; margin: 80px auto; padding: 0 24px; text-align: center; }
+  .hero-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 14px; border-radius: 99px;
+    background: var(--accent-d); border: 1px solid var(--accent-b);
+    color: var(--accent); font-size: 0.8rem; font-weight: 600; margin-bottom: 24px;
+  }
+  .hero h1 { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700; line-height: 1.2; margin-bottom: 18px; }
+  .hero p { color: var(--text2); font-size: 1.05rem; line-height: 1.7; margin-bottom: 36px; }
+  .hero-btns { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 64px; }
+
+  .features { max-width: 1100px; margin: 0 auto 80px; padding: 0 24px; }
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .feature-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 24px;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .feature-card:hover { border-color: var(--border2); background: var(--surface2); }
+  .feature-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; margin-bottom: 14px;
+  }
+  .feature-card h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 6px; }
+  .feature-card p  { font-size: 0.85rem; color: var(--text2); line-height: 1.6; }
+
+  .stats-row {
+    display: flex; gap: 0; justify-content: center;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius2); max-width: 700px; margin: 0 auto 64px;
+    overflow: hidden;
+  }
+  .stat-item { flex: 1; padding: 24px; text-align: center; border-right: 1px solid var(--border); }
+  .stat-item:last-child { border-right: none; }
+  .stat-item .num { font-size: 1.5rem; font-weight: 700; color: var(--accent); }
+  .stat-item .lbl { font-size: 0.78rem; color: var(--text2); margin-top: 4px; }
+
+  .cta-box {
+    max-width: 520px; margin: 0 auto 40px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 40px 32px; text-align: center;
+  }
+  .cta-box h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 10px; }
+  .cta-box p  { color: var(--text2); font-size: 0.9rem; margin-bottom: 24px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="hero fade-in">
+  <div class="hero-badge">
+    <div class="dot-live"></div>
+    Real-Time Detection · BISINDO
+  </div>
+  <h1>Komunikasi Inklusif Bahasa Isyarat<br/>Secara Alami &amp; Real-Time</h1>
+  <p>Jembatan komunikasi interaktif antara Teman Tuli dan Teman Dengar: Deteksi isyarat tangan berpresisi tinggi, percakapan suara dua arah, kamus visual, dan kuis latihan mandiri.</p>
+  <div class="hero-btns">
+    {% if current_user.is_authenticated %}
+      <a href="{{ url_for('translate') }}" class="btn btn-primary" style="padding:12px 24px;font-size:0.95rem;">
+        <i class="fa-solid fa-video"></i> Mulai Terjemahan
+      </a>
+      <a href="{{ url_for('dialog') }}" class="btn btn-ghost" style="padding:12px 24px;font-size:0.95rem;">
+        <i class="fa-solid fa-comments text-accent"></i> Dialog 2 Arah
+      </a>
+      <a href="{{ url_for('practice') }}" class="btn btn-ghost" style="padding:12px 24px;font-size:0.95rem;">
+        <i class="fa-solid fa-graduation-cap"></i> Mode Latihan
+      </a>
+      <a href="{{ url_for('dictionary') }}" class="btn btn-ghost" style="padding:12px 24px;font-size:0.95rem;">
+        <i class="fa-solid fa-book-open"></i> Kamus Isyarat
+      </a>
+    {% else %}
+      <a href="{{ url_for('register') }}" class="btn btn-primary" style="padding:12px 28px;font-size:0.95rem;">
+        <i class="fa-solid fa-arrow-right"></i> Mulai Gratis
+      </a>
+      <a href="{{ url_for('dictionary') }}" class="btn btn-ghost" style="padding:12px 28px;font-size:0.95rem;">
+        <i class="fa-solid fa-book-open"></i> Lihat Kamus
+      </a>
+    {% endif %}
+  </div>
+</section>
+
+<!-- Stats -->
+<div class="stats-row">
+  <div class="stat-item"><div class="num">26+</div><div class="lbl">Huruf BISINDO</div></div>
+  <div class="stat-item"><div class="num">YOLOv8</div><div class="lbl">Detection Engine</div></div>
+  <div class="stat-item"><div class="num">2 Tangan</div><div class="lbl">MediaPipe Tracking</div></div>
+  <div class="stat-item"><div class="num">Kuis AI</div><div class="lbl">Latihan Interaktif</div></div>
+</div>
+
+<!-- Features -->
+<div class="features">
+  <div style="text-align:center; margin-bottom:36px;">
+    <h2 style="font-size:1.5rem;font-weight:700;margin-bottom:8px;">Fitur Lengkap</h2>
+    <p style="color:var(--text2);font-size:0.9rem;">Semua yang kamu butuhkan untuk belajar dan menggunakan bahasa isyarat</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-bolt"></i>
+      </div>
+      <h3>Deteksi Real-Time</h3>
+      <p>Mendeteksi isyarat tangan BISINDO secara instan dengan kestabilan tinggi untuk komunikasi alami.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-graduation-cap"></i>
+      </div>
+      <h3>Mode Latihan &amp; Kuis</h3>
+      <p>Tirukan gerakan isyarat tangan dengan panduan visual dan evaluasi ketepatan gerakan secara langsung.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-volume-high"></i>
+      </div>
+      <h3>Suara Otomatis</h3>
+      <p>Setiap isyarat yang terdeteksi dapat langsung disuarakan secara natural tanpa perlu menekan tombol.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-book-open"></i>
+      </div>
+      <h3>Kamus Isyarat Lengkap</h3>
+      <p>Kamus referensi alfabet A–Z, angka, dan kata umum beserta panduan posisi anatomi jari.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-chart-simple"></i>
+      </div>
+      <h3>Dashboard &amp; Riwayat</h3>
+      <p>Pantau catatan sesi percakapan, jumlah kosakata yang dipelajari, dan riwayat yang tersimpan rapi.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon" style="background:#f4f4f2;color:#141414;border:1px solid #e8e8e6;">
+        <i class="fa-solid fa-comments"></i>
+      </div>
+      <h3>Mode Dialog 2 Arah</h3>
+      <p>Jembatan percakapan Teman Tuli &amp; Teman Dengar: Suara diubah ke rangkaian isyarat, isyarat diubah ke suara.</p>
+    </div>
+  </div>
+</div>
+
+{% if not current_user.is_authenticated %}
+<div class="features">
+  <div class="cta-box">
+    <h3>Siap Mencoba?</h3>
+    <p>Daftar gratis dan mulai terjemahkan bahasa isyarat sekarang.</p>
+    <a href="{{ url_for('register') }}" class="btn btn-primary" style="padding:12px 32px;font-size:0.95rem;">
+      <i class="fa-solid fa-arrow-right"></i> Daftar Sekarang
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

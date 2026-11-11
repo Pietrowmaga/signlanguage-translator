@@ -1,0 +1,366 @@
+{% extends "base.html" %}
+{% block title %}Mode Latihan & Kuis — SignLanguageTranslator{% endblock %}
+
+{% block extra_head %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<style>
+  .practice-wrap {
+    max-width: 1200px; margin: 24px auto; padding: 0 20px 40px;
+    display: grid; grid-template-columns: 340px 1fr; gap: 20px;
+  }
+  @media(max-width: 900px) {
+    .practice-wrap { grid-template-columns: 1fr; }
+  }
+
+  .stat-badge {
+    display: flex; align-items: center; gap: 6px;
+    background: var(--surface); border: 1px solid var(--border);
+    padding: 6px 14px; border-radius: var(--radius);
+    font-size: 0.85rem; font-weight: 600;
+  }
+
+  /* Target Card */
+  .target-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius2); padding: 24px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .target-letter-badge {
+    height: 140px; border-radius: var(--radius);
+    background: var(--surface2); border: 1px solid var(--border2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .target-letter-text {
+    font-size: 3.5rem; font-weight: 800; color: var(--accent); line-height: 1;
+  }
+  .target-category-label {
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text3); font-weight: 700; margin-top: 6px;
+  }
+
+  .guide-tip {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
+    font-size: 0.82rem; color: var(--text2); line-height: 1.6;
+  }
+
+  /* Game Category Selector */
+  .cat-pills { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cat-pill {
+    padding: 6px 12px; border-radius: 99px; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text2);
+    cursor: pointer; transition: all 0.15s;
+  }
+  .cat-pill.active {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+  }
+
+  /* Camera Container */
+  .cam-container {
+    background: #050505; border: 1px solid var(--border);
+    border-radius: var(--radius2); position: relative;
+    overflow: hidden; aspect-ratio: 4 / 3; display: flex;
+    align-items: center; justify-content: center;
+  }
+  #practiceVideo { width: 100%; height: 100%; object-fit: cover; }
+
+  /* Match Overlay banner */
+  .match-banner {
+    position: absolute; top: 16px; left: 16px; right: 16px;
+    background: rgba(20, 20, 20, 0.95); color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 12px 18px; border-radius: var(--radius);
+    display: none; align-items: center; justify-content: space-between;
+    font-weight: 600; font-size: 0.95rem; z-index: 10;
+    backdrop-filter: blur(10px); animation: fadeIn 0.2s ease-out;
+  }
+  .match-banner.show { display: flex; }
+
+  .live-pill {
+    position: absolute; bottom: 14px; left: 14px;
+    background: rgba(0, 0, 0, 0.75); border: 1px solid var(--border2);
+    padding: 4px 12px; border-radius: 99px; font-size: 0.75rem;
+    color: var(--text2); display: flex; align-items: center; gap: 6px;
+  }
+
+  .current-detect-pill {
+    position: absolute; bottom: 14px; right: 14px;
+    background: rgba(0, 0, 0, 0.85); border: 1px solid var(--border2);
+    padding: 6px 16px; border-radius: var(--radius);
+    font-size: 0.85rem; font-weight: 700; color: #fff;
+  }
+
+  /* Controls below camera */
+  .practice-actions {
+    display: flex; gap: 10px; margin-top: 14px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div style="max-width: 1200px; margin: 24px auto 0; padding: 0 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+  <div>
+    <h1 style="font-size:1.5rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+      <i class="fa-solid fa-graduation-cap" style="color:var(--accent);"></i>
+      Mode Latihan &amp; Kuis BISINDO
+    </h1>
+    <p style="color:var(--text2); font-size:0.85rem; margin-top:2px;">
+      Tirukan bentuk isyarat huruf A–Z sesuai instruksi. AI akan mengecek ketepatan gerakanmu secara real-time!
+    </p>
+  </div>
+  <div style="display:flex; gap:10px;">
+    <div class="stat-badge">
+      <i class="fa-solid fa-fire" style="color:#f97316;"></i>
+      <span>Streak: <strong id="streakCount">{{ current_user.practice_streak or 0 }}</strong></span>
+    </div>
+    <div class="stat-badge">
+      <i class="fa-solid fa-star" style="color:var(--amber);"></i>
+      <span>Skor: <strong id="scoreCount">{{ current_user.practice_score or 0 }}</strong></span>
+    </div>
+  </div>
+</div>
+
+<div class="practice-wrap">
+  <!-- Left Column: Current Challenge Details -->
+  <div class="target-box fade-in">
+    <div>
+      <span style="font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3);">Kategori Tantangan:</span>
+      <div class="cat-pills" style="margin-top:8px;">
+        <button class="cat-pill active"><i class="fa-solid fa-font"></i> Alfabet A–Z (26 Huruf)</button>
+      </div>
+    </div>
+
+    <div class="target-letter-badge">
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;width:100%;padding:10px;">
+        <img id="targetPhoto" src="/static/img/signs/A.jpg" style="height:96px;width:auto;object-fit:contain;background:#fff;padding:4px;border-radius:8px;border:1px solid var(--border);filter:drop-shadow(0 2px 5px rgba(0,0,0,0.08));" alt="Panduan Isyarat" onerror="this.onerror=null; this.src='/static/img/signs/A.jpg';" />
+        <div style="display:flex;flex-direction:column;align-items:flex-start;">
+          <div class="target-letter-text" id="targetDisplay">A</div>
+          <div class="target-category-label" id="targetCat">Alfabet</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); margin-bottom:6px;">
+        Cara Membentuk Isyarat:
+      </div>
+      <div class="guide-tip" id="targetDesc">
+        Memuat petunjuk...
+      </div>
+    </div>
+
+    <div style="background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius); padding:12px; font-size:0.8rem; color:var(--text2);">
+      <div style="display:flex; align-items:center; gap:6px; font-weight:600; color:var(--text); margin-bottom:4px;">
+        <i class="fa-solid fa-lightbulb" style="color:var(--amber);"></i> Tips Latihan:
+      </div>
+      <span id="targetTip">Posisikan tangan sejajar dengan dada di depan kamera dan tahan selama 1-2 detik.</span>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-top:auto;">
+      <button class="btn btn-ghost" style="flex:1; justify-content:center;" onclick="speakTarget()">
+        <i class="fa-solid fa-volume-high"></i> Suara
+      </button>
+      <button class="btn btn-ghost" style="flex:1; justify-content:center;" onclick="nextTarget(false)">
+        <i class="fa-solid fa-forward"></i> Lewati
+      </button>
+    </div>
+  </div>
+
+  <!-- Right Column: Live Camera Verification -->
+  <div>
+    <div class="cam-container">
+      <img id="practiceVideo" src="{{ url_for('video_feed') }}" alt="Memuat kamera..." />
+
+      <!-- Banner Success -->
+      <div class="match-banner" id="matchBanner">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-circle-check" style="font-size:1.2rem;"></i>
+          <span>Hebat! Isyarat <strong id="successWord">A</strong> Cocok! (+10 Poin)</span>
+        </div>
+        <i class="fa-solid fa-arrow-right"></i>
+      </div>
+
+      <div class="live-pill">
+        <div class="dot-live"></div>
+        <span>AI Verifikasi Aktif</span>
+      </div>
+
+      <div class="current-detect-pill" id="currentDetectPill">
+        Deteksi: <span id="detectedWord" style="color:var(--accent);">Menunggu...</span>
+      </div>
+    </div>
+
+    <div class="practice-actions">
+      <a href="{{ url_for('dictionary') }}" class="btn btn-ghost" style="font-size:0.85rem;">
+        <i class="fa-solid fa-book-open"></i> Lihat Kamus Lengkap
+      </a>
+      <a href="{{ url_for('translate') }}" class="btn btn-primary" style="margin-left:auto; font-size:0.85rem;">
+        <i class="fa-solid fa-video"></i> Buka Translator Penuh
+      </a>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Practice Challenges Database
+const CHALLENGES = [
+  // ── Alfabet A–Z (26 Huruf) ──────────────────────────────────
+  { id:'A', type:'alphabet', label:'A', cat:'Alfabet', desc:'Kepalkan semua jari rapat, ibu jari ditekuk ke samping sejajar dengan telunjuk.', tip:'Tahan posisi kepalan tangan tegak di depan kamera.' },
+  { id:'B', type:'alphabet', label:'B', cat:'Alfabet', desc:'Empat jari (telunjuk sampai kelingking) tegak lurus berdampingan rapat. Ibu jari dilipat di telapak.', tip:'Pastikan keempat jari tegak lurus dan rapat.' },
+  { id:'C', type:'alphabet', label:'C', cat:'Alfabet', desc:'Lengkungkan semua jari dan ibu jari membentuk setengah lingkaran seperti huruf C.', tip:'Telapak tangan menghadap ke samping.' },
+  { id:'D', type:'alphabet', label:'D', cat:'Alfabet', desc:'Telunjuk tegak lurus ke atas. Tiga jari lain melengkung menyentuh ujung ibu jari.', tip:'Hanya jari telunjuk yang lurus tegak.' },
+  { id:'E', type:'alphabet', label:'E', cat:'Alfabet', desc:'Semua jari ditekuk setengah ke arah telapak tangan, ibu jari dilipat di bawah ujung jari.', tip:'Jari tidak tertutup penuh, melainkan setengah cakar.' },
+  { id:'F', type:'alphabet', label:'F', cat:'Alfabet', desc:'Ujung ibu jari dan telunjuk bersentuhan membentuk lingkaran. Tiga jari lain tegak ke atas.', tip:'Posisi gesture OK yang umum.' },
+  { id:'G', type:'alphabet', label:'G', cat:'Alfabet', desc:'Telunjuk menunjuk ke samping sejajar horizontal, ibu jari tegak ke atas. Tiga jari lain dilipat.', tip:'Seperti menunjuk ke arah samping.' },
+  { id:'H', type:'alphabet', label:'H', cat:'Alfabet', desc:'Telunjuk dan jari tengah lurus berdampingan menunjuk ke samping secara horizontal.', tip:'Dua jari rapat sejajar horizontal.' },
+  { id:'I', type:'alphabet', label:'I', cat:'Alfabet', desc:'Hanya kelingking yang tegak lurus ke atas. Keempat jari lainnya dilipat rapat.', tip:'Hanya jari kelingking yang berdiri tegak.' },
+  { id:'J', type:'alphabet', label:'J', cat:'Alfabet', desc:'Mulai dari kelingking tegak, gerakkan kelingking membentuk lengkungan huruf J di udara.', tip:'Gerakkan tangan membentuk huruf J.' },
+  { id:'K', type:'alphabet', label:'K', cat:'Alfabet', desc:'Telunjuk dan jari tengah tegak membentuk sudut V, ibu jari menyentuh pangkal jari tengah.', tip:'Mirip huruf V dengan ibu jari di antara kedua jari.' },
+  { id:'L', type:'alphabet', label:'L', cat:'Alfabet', desc:'Telunjuk tegak lurus ke atas dan ibu jari lurus ke samping membentuk sudut siku-siku huruf L.', tip:'Sudut 90 derajat antara ibu jari dan telunjuk.' },
+  { id:'M', type:'alphabet', label:'M', cat:'Alfabet', desc:'Tiga jari (telunjuk, tengah, manis) menekuk ke bawah menutupi ibu jari yang terlipat.', tip:'Tiga jari menutup ibu jari.' },
+  { id:'N', type:'alphabet', label:'N', cat:'Alfabet', desc:'Dua jari (telunjuk dan tengah) menekuk ke bawah menutupi ibu jari yang terlipat.', tip:'Dua jari menutup ibu jari.' },
+  { id:'O', type:'alphabet', label:'O', cat:'Alfabet', desc:'Semua ujung jari menyentuh ujung ibu jari membentuk lingkaran bulat penuh huruf O.', tip:'Bentuk lingkaran sempurna dengan ujung jari.' },
+  { id:'P', type:'alphabet', label:'P', cat:'Alfabet', desc:'Telunjuk dan jari tengah mengarah ke bawah, ibu jari menyangga ke samping.', tip:'Posisi huruf K tetapi diarahkan ke bawah.' },
+  { id:'Q', type:'alphabet', label:'Q', cat:'Alfabet', desc:'Telunjuk dan ibu jari mengarah ke bawah seperti memegang benda kecil.', tip:'Posisi huruf G tetapi dihadapkan ke bawah.' },
+  { id:'R', type:'alphabet', label:'R', cat:'Alfabet', desc:'Silangkan jari telunjuk dan jari tengah (posisi crossed fingers).', tip:'Jari tengah menyilang di atas jari telunjuk.' },
+  { id:'S', type:'alphabet', label:'S', cat:'Alfabet', desc:'Kepalkan tangan rapat dengan ibu jari menutup melintang di atas jari-jari lain.', tip:'Ibu jari berada di depan jari-jari yang dilipat.' },
+  { id:'T', type:'alphabet', label:'T', cat:'Alfabet', desc:'Kepalan tangan dengan ibu jari menyembul keluar di antara telunjuk dan jari tengah.', tip:'Ibu jari berada di antara telunjuk dan tengah.' },
+  { id:'U', type:'alphabet', label:'U', cat:'Alfabet', desc:'Telunjuk dan jari tengah tegak lurus ke atas berdampingan rapat tanpa celah.', tip:'Dua jari tegak lurus dan menempel rapat.' },
+  { id:'V', type:'alphabet', label:'V', cat:'Alfabet', desc:'Telunjuk dan jari tengah tegak terbuka membentuk sudut huruf V yang jelas.', tip:'Gesture perdamaian / victory sign.' },
+  { id:'W', type:'alphabet', label:'W', cat:'Alfabet', desc:'Tiga jari (telunjuk, tengah, manis) tegak terbuka ke atas. Kelingking dan jempol dilipat.', tip:'Tiga jari terbuka membentuk huruf W.' },
+  { id:'X', type:'alphabet', label:'X', cat:'Alfabet', desc:'Telunjuk dibengkokkan melengkung seperti kait kail pancing.', tip:'Hanya telunjuk yang melengkung ke depan.' },
+  { id:'Y', type:'alphabet', label:'Y', cat:'Alfabet', desc:'Ibu jari dan kelingking terbuka keluar (shaka sign), tiga jari tengah dilipat ke telapak.', tip:'Gesture shaka atau telepon.' },
+  { id:'Z', type:'alphabet', label:'Z', cat:'Alfabet', desc:'Gunakan jari telunjuk untuk menggambar bentuk huruf Z di udara.', tip:'Gerakkan telunjuk membentuk pola huruf Z.' }
+];
+
+let currentCat = 'all';
+let currentItem = null;
+let currentScore = {{ current_user.practice_score or 0 }};
+let currentStreak = {{ current_user.practice_streak or 0 }};
+let isTransitioning = false;
+
+// Web Audio API Sound Chime
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSuccessSound() {
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch(e) {}
+}
+
+function getRandomChallenge() {
+  let picked;
+  do {
+    picked = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+  } while (CHALLENGES.length > 1 && currentItem && picked.label === currentItem.label);
+  return picked;
+}
+
+function loadTarget(item) {
+  currentItem = item;
+  document.getElementById('targetDisplay').textContent = item.label;
+  document.getElementById('targetCat').textContent = item.cat;
+  document.getElementById('targetDesc').textContent = item.desc;
+  document.getElementById('targetTip').textContent = item.tip;
+
+  const clean = item.label.toUpperCase();
+  const photoFile = clean + '.jpg';
+  const imgEl = document.getElementById('targetPhoto');
+  if (imgEl) {
+    imgEl.src = '/static/img/signs/' + photoFile;
+  }
+}
+
+function nextTarget(earned) {
+  if (earned) {
+    currentScore += 10;
+    currentStreak += 1;
+  } else {
+    currentStreak = 0;
+  }
+  document.getElementById('scoreCount').textContent = currentScore;
+  document.getElementById('streakCount').textContent = currentStreak;
+
+  // Persist score to backend
+  fetch('/api/practice/score', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ score: currentScore, streak: currentStreak })
+  }).catch(()=>{});
+
+  loadTarget(getRandomChallenge());
+}
+
+function setCategory(cat, btn) {
+  currentCat = 'all';
+  nextTarget(false);
+}
+
+function speakTarget() {
+  if (!currentItem) return;
+  const u = new SpeechSynthesisUtterance('Huruf ' + currentItem.label);
+  u.lang = 'id-ID';
+  u.rate = 0.9;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+// Socket IO real-time verification with instant zero-latency feedback
+const socket = io(location.protocol + '//' + document.domain + ':' + location.port,
+  { transports: ['websocket', 'polling'] });
+
+function checkMatch(word, confidence) {
+  if (!word || isTransitioning || !currentItem) return;
+  const detected = String(word).toUpperCase().trim();
+  const el = document.getElementById('detectedWord');
+  if (el) el.textContent = `${detected} (${Math.round(confidence)}%)`;
+
+  const target = currentItem.label.toUpperCase().trim();
+  if (target === detected && confidence >= 25) {
+    isTransitioning = true;
+    playSuccessSound();
+
+    // Confetti effect
+    try {
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+    } catch(e) {}
+
+    const banner = document.getElementById('matchBanner');
+    document.getElementById('successWord').textContent = currentItem.label;
+    banner.classList.add('show');
+
+    setTimeout(() => {
+      banner.classList.remove('show');
+      nextTarget(true);
+      isTransitioning = false;
+    }, 1200);
+  }
+}
+
+socket.on('live_detection', data => {
+  if (data && data.word) checkMatch(data.word, data.confidence);
+});
+
+socket.on('detection', data => {
+  if (data && data.word) checkMatch(data.word, data.confidence);
+});
+
+// Init first challenge
+loadTarget(getRandomChallenge());
+</script>
+{% endblock %}
+

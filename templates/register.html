@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Daftar — SignLanguageTranslator{% endblock %}
+{% block extra_head %}
+<style>
+  .auth-wrap { min-height:calc(100vh - 56px); display:flex; align-items:center; justify-content:center; padding:40px 24px; }
+  .auth-box { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius2); padding:40px; width:100%; max-width:460px; }
+  .auth-box h2 { font-size:1.3rem; font-weight:700; margin-bottom:6px; }
+  .auth-box .sub { color:var(--text2); font-size:0.875rem; margin-bottom:32px; }
+  .form-group { margin-bottom:16px; }
+  .form-label { display:block; font-size:0.8rem; font-weight:600; color:var(--text2); margin-bottom:7px; text-transform:uppercase; letter-spacing:0.04em; }
+  .input-wrap { position:relative; }
+  .input-icon { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:13px; }
+  .input-pad  { padding-left:38px; }
+  .toggle-pass { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; color:var(--text3); cursor:pointer; font-size:13px; }
+  .toggle-pass:hover { color:var(--text); }
+  .hint { font-size:0.75rem; margin-top:5px; }
+  .strength-bar { height:3px; border-radius:99px; background:var(--border); margin-top:7px; overflow:hidden; }
+  .strength-fill { height:100%; border-radius:99px; width:0%; transition:all 0.3s; }
+  .divider { display:flex; align-items:center; gap:12px; color:var(--text3); font-size:0.8rem; margin:20px 0; }
+  .divider::before,.divider::after { content:''; flex:1; height:1px; background:var(--border); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="auth-wrap">
+  <div>
+    <a href="{{ url_for('homepage') }}" class="btn btn-ghost btn-sm" style="margin-bottom:20px;">
+      <i class="fa-solid fa-arrow-left"></i> Kembali
+    </a>
+    <div class="auth-box fade-in">
+      <h2>Buat Akun Baru</h2>
+      <p class="sub">Gratis selamanya — mulai dalam 30 detik</p>
+
+      <form method="POST">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-user input-icon"></i>
+            <input type="text" name="username" class="input input-pad" placeholder="username_kamu"
+                   value="{{ request.form.username or '' }}" minlength="3" maxlength="30" required
+                   oninput="checkUser(this.value)" />
+          </div>
+          <div id="userHint" class="hint" style="color:var(--text3);"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" name="email" class="input input-pad" placeholder="nama@email.com"
+                   value="{{ request.form.email or '' }}" required />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-lock input-icon"></i>
+            <input type="password" name="password" id="pw1" class="input input-pad"
+                   placeholder="Minimal 6 karakter" required oninput="checkStrength(this.value)" />
+            <button type="button" class="toggle-pass" onclick="togglePw('pw1','ei1')"><i class="fa-solid fa-eye" id="ei1"></i></button>
+          </div>
+          <div class="strength-bar"><div id="sf" class="strength-fill"></div></div>
+          <div id="strengthHint" class="hint" style="color:var(--text3);">Masukkan password</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Konfirmasi Password</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-shield-halved input-icon"></i>
+            <input type="password" name="password2" id="pw2" class="input input-pad"
+                   placeholder="Ulangi password" required oninput="checkMatch()" />
+            <button type="button" class="toggle-pass" onclick="togglePw('pw2','ei2')"><i class="fa-solid fa-eye" id="ei2"></i></button>
+          </div>
+          <div id="matchHint" class="hint" style="color:var(--text3);"></div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px;margin-top:8px;">
+          <i class="fa-solid fa-user-plus"></i> Buat Akun
+        </button>
+      </form>
+
+      <div class="divider">atau</div>
+      <p style="text-align:center;font-size:0.875rem;color:var(--text2);">
+        Sudah punya akun? <a href="{{ url_for('login') }}" style="color:var(--accent);font-weight:600;">Masuk di sini</a>
+      </p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_scripts %}
+<script>
+function togglePw(fid,iid){const f=document.getElementById(fid),i=document.getElementById(iid);f.type=f.type==='password'?'text':'password';i.className=f.type==='password'?'fa-solid fa-eye':'fa-solid fa-eye-slash';}
+function checkUser(v){const h=document.getElementById('userHint');if(!v){h.textContent='';return;}if(v.length<3){h.textContent='Minimal 3 karakter';h.style.color='var(--red)';}else if(/^[a-zA-Z0-9_]+$/.test(v)){h.textContent='✓ Username valid';h.style.color='var(--green)';}else{h.textContent='Hanya huruf, angka, dan underscore';h.style.color='var(--amber)';}}
+function checkStrength(v){const f=document.getElementById('sf'),t=document.getElementById('strengthHint');let s=0;if(v.length>=6)s++;if(v.length>=10)s++;if(/[A-Z]/.test(v))s++;if(/[0-9]/.test(v))s++;if(/[^a-zA-Z0-9]/.test(v))s++;const l=[['0%','#333','Masukkan password'],['20%','var(--red)','Sangat lemah'],['40%','#f97316','Lemah'],['60%','var(--amber)','Cukup'],['80%','var(--green)','Kuat'],['100%','var(--green)','Sangat kuat']][Math.min(s,5)];f.style.width=l[0];f.style.background=l[1];t.textContent=l[2];t.style.color=l[1];}
+function checkMatch(){const p1=document.getElementById('pw1').value,p2=document.getElementById('pw2').value,h=document.getElementById('matchHint');if(!p2){h.textContent='';return;}if(p1===p2){h.textContent='✓ Password cocok';h.style.color='var(--green)';}else{h.textContent='✗ Tidak cocok';h.style.color='var(--red)';}}
+</script>
+{% endblock %}

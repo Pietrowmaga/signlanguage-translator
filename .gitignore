@@ -1,0 +1,32 @@
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local Database instance
+instance/*.db
+*.sqlite3
+
+# OS & Editor
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Office Temporary Files
+~$*.docx
+~$*.xlsx
+
+# Temporary Test Outputs
+test_out.png
+*.log
+.env
+.vercel

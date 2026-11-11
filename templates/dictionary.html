@@ -1,0 +1,617 @@
+{% extends "base.html" %}
+{% block title %}Kamus Isyarat BISINDO — SignLanguageTranslator{% endblock %}
+
+{% block extra_head %}
+<style>
+  .dict-header { max-width:1200px; margin:40px auto 0; padding:0 24px; }
+  .dict-header h1 { font-size:1.8rem; font-weight:700; margin-bottom:8px; }
+  .dict-header p  { color:var(--text2); font-size:0.9rem; }
+
+  .dict-controls {
+    max-width:1200px; margin:24px auto; padding:0 24px;
+    display:flex; gap:12px; flex-wrap:wrap; align-items:center;
+  }
+  .search-wrap { position:relative; flex:1; min-width:200px; }
+  .search-wrap i { position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:13px; }
+  .search-wrap input { padding-left:36px; }
+
+  .filter-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+  .ftab {
+    padding:7px 14px; border-radius:var(--radius); font-size:0.8rem; font-weight:600;
+    border:1px solid var(--border); background:var(--surface); color:var(--text2);
+    cursor:pointer; transition:all 0.15s;
+  }
+  .ftab:hover { border-color:var(--border2); color:var(--text); }
+  .ftab.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  .dict-grid {
+    max-width:1200px; margin:0 auto 40px; padding:0 24px;
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap:12px;
+  }
+
+  /* Sign Card */
+  .sign-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:var(--radius2); overflow:hidden; cursor:pointer;
+    transition:all 0.25s cubic-bezier(0.16, 1, 0.3, 1); position:relative;
+    box-shadow:var(--shadow-sm);
+  }
+  .sign-card:hover {
+    border-color:var(--border2);
+    background:var(--surface2);
+    transform:translateY(-2px);
+    box-shadow:var(--shadow-md);
+  }
+
+  .sign-display {
+    height:135px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center;
+    border-bottom:1px solid var(--border);
+    background:#ffffff;
+    position:relative;
+    padding:8px;
+    overflow:hidden;
+  }
+  .sign-img {
+    max-height:110px; max-width:92%;
+    object-fit:contain;
+    transition:transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    filter:drop-shadow(0 2px 4px rgba(0,0,0,0.06));
+  }
+  .sign-card:hover .sign-img {
+    transform:scale(1.08);
+  }
+  .sign-letter-badge {
+    position:absolute; bottom:6px; left:8px;
+    background:rgba(20, 20, 20, 0.88); color:#fff;
+    font-size:0.72rem; font-weight:700;
+    padding:2px 7px; border-radius:4px;
+    letter-spacing:0.04em;
+  }
+
+  .sign-cat-dot {
+    position:absolute; top:10px; right:10px;
+    width:7px; height:7px; border-radius:50%;
+  }
+
+  .sign-voice-btn {
+    position:absolute; top:8px; right:8px;
+    width:28px; height:28px; border-radius:50%;
+    border:1px solid var(--border); background:rgba(255,255,255,0.95);
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--text2); font-size:11px;
+    transition:all 0.15s; z-index:2;
+  }
+  .sign-voice-btn:hover { background:var(--accent); color:#fff; border-color:var(--accent); transform:scale(1.08); }
+
+  .sign-body { padding:12px 14px; }
+  .sign-word { font-weight:700; font-size:0.95rem; margin-bottom:4px; }
+  .sign-desc { font-size:0.78rem; color:var(--text2); line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+
+  /* Modal */
+  .modal-overlay {
+    display:none; position:fixed; inset:0; z-index:200;
+    background:rgba(0,0,0,0.65); backdrop-filter:blur(6px);
+    align-items:center; justify-content:center; padding:24px;
+  }
+  .modal-overlay.open { display:flex; }
+  .modal-box {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; width:100%; max-width:480px;
+    overflow:hidden; animation:fadeIn 0.2s ease-out;
+    box-shadow:var(--shadow-lg);
+  }
+  .modal-top {
+    height:210px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; position:relative;
+    border-bottom:1px solid var(--border); background:#ffffff;
+    padding:16px;
+  }
+  .modal-sign-img {
+    max-height:170px; max-width:85%; object-fit:contain;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,0.08));
+  }
+  .modal-badge-row {
+    position:absolute; bottom:12px; right:16px;
+  }
+  .modal-letter-badge {
+    font-size:0.95rem; font-weight:800;
+    background:#141414; color:#fff;
+    padding:4px 12px; border-radius:6px;
+  }
+  .modal-body { padding:24px; }
+  .modal-title { font-size:1.3rem; font-weight:700; margin-bottom:4px; }
+  .modal-cat { font-size:0.78rem; color:var(--text2); margin-bottom:16px; }
+  .info-label { font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); margin-bottom:6px; }
+  .info-text  { font-size:0.875rem; color:var(--text2); line-height:1.65; margin-bottom:16px; }
+  .tip-box {
+    background:var(--surface2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:12px 14px;
+    font-size:0.83rem; color:var(--text); margin-bottom:20px;
+  }
+  .modal-actions { display:flex; gap:8px; }
+  .modal-close { position:absolute; top:16px; right:16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--text2); font-size:14px; transition:all 0.15s; z-index:5; }
+  .modal-close:hover { background:var(--border2); color:var(--text); }
+
+  .empty-state { text-align:center; padding:80px 24px; color:var(--text3); }
+  .empty-state .icon { font-size:3rem; margin-bottom:12px; }
+
+  /* Category indicator dots - refined architectural monochrome tones */
+  .cat-alphabet { background:#141414; }
+  .cat-number   { background:#525252; }
+  .cat-greeting { background:#737373; }
+  .cat-family   { background:#a3a3a3; }
+  .cat-feeling  { background:#737373; }
+  .cat-activity { background:#525252; }
+  .cat-place    { background:#141414; }
+  .cat-time     { background:#a3a3a3; }
+  .cat-question { background:#525252; }
+  .cat-polite   { background:#737373; }
+  .cat-color    { background:#141414; }
+  .cat-social   { background:#525252; }
+  .cat-expr     { background:#737373; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dict-header fade-in">
+  <h1><i class="fa-solid fa-book-open" style="color:var(--accent); margin-right:8px;"></i> Kamus Bahasa Isyarat BISINDO</h1>
+  <p>Panduan visual interaktif lengkap 26 huruf alfabet (A–Z) BISINDO dengan foto panduan posisi tangan berpresisi tinggi</p>
+</div>
+
+<!-- Interactive Text-to-Sign Visualizer Studio -->
+<div class="fade-in" style="max-width:1200px;margin:24px auto 0;padding:0 24px;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:1.05rem;">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent);"></i>
+        Generator Rangkaian Isyarat (Text-to-Sign Studio)
+      </div>
+      <span style="font-size:0.75rem;color:var(--text3);">Ketik kata/kalimat apa saja untuk melihat simulasi gerakan hurufnya</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input type="text" class="input" id="ttsSignInput" placeholder="Ketik kata di sini (contoh: BISINDO, BIMO)..." style="flex:1;" onkeydown="if(event.key==='Enter') generateSignSequence()" />
+      <button class="btn btn-primary" onclick="generateSignSequence()">
+        <i class="fa-solid fa-play"></i> Urai Gerakan
+      </button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+      <span style="font-size:0.72rem;color:var(--text3);font-weight:700;text-transform:uppercase;">Contoh Cepat:</span>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:0.75rem;border-radius:99px;" onclick="setStudioWord('BISINDO')">BISINDO</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:0.75rem;border-radius:99px;" onclick="setStudioWord('BIMO')">BIMO</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:0.75rem;border-radius:99px;" onclick="setStudioWord('HALO')">HALO</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:0.75rem;border-radius:99px;" onclick="setStudioWord('INFORMATIKA')">INFORMATIKA</button>
+      <button class="btn btn-ghost btn-sm" style="padding:2px 10px;font-size:0.75rem;border-radius:99px;" onclick="setStudioWord('SELAMAT')">SELAMAT</button>
+    </div>
+    <div id="ttsSignOutputArea" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:0.78rem;font-weight:700;color:var(--text3);text-transform:uppercase;">Rangkaian Huruf:</span>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-ghost btn-sm" onclick="playDictSequence()"><i class="fa-solid fa-rotate-right"></i> Putar Ulang</button>
+          <button class="btn btn-ghost btn-sm" onclick="speakDictText()"><i class="fa-solid fa-volume-high"></i> Suara</button>
+        </div>
+      </div>
+      <div id="ttsSignCardRow" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;"></div>
+    </div>
+  </div>
+</div>
+
+<div class="dict-controls fade-in">
+  <div class="search-wrap">
+    <i class="fa-solid fa-magnifying-glass"></i>
+    <input type="text" class="input" id="searchInput" placeholder="Cari huruf alfabet (A–Z)..." oninput="filterCards()" />
+  </div>
+  <div class="filter-tabs">
+    <button class="ftab active" id="filterAllBtn" onclick="setLetterFilter('all', this)"><i class="fa-solid fa-font"></i> Semua (26 Huruf)</button>
+  </div>
+</div>
+
+<!-- A–Z Quick Alphabet Jump Bar -->
+<div class="fade-in" style="max-width:1200px;margin:0 auto 20px;padding:0 24px;">
+  <div id="quickAlphaBar" style="display:flex;gap:4px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch;"></div>
+</div>
+
+<div class="dict-grid" id="dictGrid"></div>
+<div class="empty-state" id="emptyState" style="display:none;">
+  <div class="icon" style="font-size:2rem;color:var(--text3);margin-bottom:12px;"><i class="fa-solid fa-magnifying-glass"></i></div>
+  <p>Tidak ada isyarat ditemukan untuk "<span id="searchTerm"></span>"</p>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="signModal" onclick="closeModalOutside(event)">
+  <div class="modal-box" style="position:relative;">
+    <button class="modal-close" onclick="closeModal()"><i class="fa-solid fa-xmark"></i></button>
+    <div class="modal-top">
+      <img id="mImg" src="/static/img/signs/A.jpg" alt="Foto Isyarat" class="modal-sign-img" />
+      <div class="modal-badge-row">
+        <span class="modal-letter-badge" id="mLetter">A</span>
+      </div>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" id="btnPrevModal" onclick="navModal(-1)"><i class="fa-solid fa-arrow-left"></i> Sebelumnya</button>
+        <span style="font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;">Alfabet BISINDO</span>
+        <button class="btn btn-ghost btn-sm" id="btnNextModal" onclick="navModal(1)">Berikutnya <i class="fa-solid fa-arrow-right"></i></button>
+      </div>
+
+      <div class="modal-title" id="mTitle"></div>
+      <div class="modal-cat"   id="mCat"></div>
+      <div class="info-label">Cara Membentuk Posisi Jari</div>
+      <div class="info-text"   id="mDesc"></div>
+      <div class="tip-box">
+        <i class="fa-solid fa-lightbulb" style="margin-right:6px;"></i>
+        <span id="mTip"></span>
+      </div>
+      <div class="modal-actions" style="flex-wrap:wrap;">
+        <button class="btn btn-primary" onclick="speakCurrent()" style="flex:1;min-width:120px;justify-content:center;">
+          <i class="fa-solid fa-volume-high"></i> Dengarkan
+        </button>
+        <a href="{{ url_for('practice') }}" class="btn btn-ghost" style="flex:1;min-width:120px;justify-content:center;text-decoration:none;">
+          <i class="fa-solid fa-graduation-cap"></i> Uji di Kuis
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// ============================================================
+// SIGN DATA — BISINDO Alphabet, Numbers, Common Words
+// ============================================================
+const SIGNS = [
+  // ── ALFABET A–Z ──────────────────────────────────────────
+  { id:'A', type:'alphabet', letter:'A', emoji:'✊', category:'Alfabet',
+    desc:'Kepalkan semua jari, ibu jari ditekuk ke samping sejajar dengan telunjuk.',
+    tip:'Pastikan semua jari tertutup rapat seperti kepalan tinju.' },
+  { id:'B', type:'alphabet', letter:'B', emoji:'🖐️', category:'Alfabet',
+    desc:'Empat jari (telunjuk–kelingking) lurus tegak ke atas berdampingan, ibu jari dilipat menyilang ke telapak.',
+    tip:'Jari-jari rapat dan tegak lurus, ibu jari rata dengan telapak.' },
+  { id:'C', type:'alphabet', letter:'C', emoji:'🤏', category:'Alfabet',
+    desc:'Semua jari melengkung membentuk huruf C setengah lingkaran, telapak menghadap ke samping.',
+    tip:'Bayangkan sedang menggenggam sebuah kaleng tipis.' },
+  { id:'D', type:'alphabet', letter:'D', emoji:'☝️', category:'Alfabet',
+    desc:'Telunjuk tegak lurus ke atas, jari tengah/manis/kelingking melengkung menyentuh ibu jari membentuk lingkaran.',
+    tip:'Telunjuk harus benar-benar lurus vertikal.' },
+  { id:'E', type:'alphabet', letter:'E', emoji:'🤙', category:'Alfabet',
+    desc:'Semua jari menekuk setengah ke arah telapak, ibu jari menyentuh sisi-sisi jari yang bengkok.',
+    tip:'Jari tidak tertutup penuh — setengah menekuk seperti cakar.' },
+  { id:'F', type:'alphabet', letter:'F', emoji:'👌', category:'Alfabet',
+    desc:'Ibu jari dan telunjuk membentuk lingkaran (posisi OK), tiga jari lainnya tegak lurus ke atas.',
+    tip:'Sama persis dengan gesture "OK" yang umum.' },
+  { id:'G', type:'alphabet', letter:'G', emoji:'👉', category:'Alfabet',
+    desc:'Telunjuk menunjuk ke samping sejajar lantai, ibu jari tegak ke atas. Tiga jari lain dilipat.',
+    tip:'Seperti menunjuk ke arah samping sambil ibu jari berdiri.' },
+  { id:'H', type:'alphabet', letter:'H', emoji:'👉', category:'Alfabet',
+    desc:'Telunjuk dan jari tengah lurus berdampingan menunjuk ke samping secara horizontal.',
+    tip:'Dua jari rapat seperti pistol yang dimiringkan ke samping.' },
+  { id:'I', type:'alphabet', letter:'I', emoji:'🤙', category:'Alfabet',
+    desc:'Hanya kelingking yang tegak ke atas. Keempat jari lainnya dilipat, ibu jari menutup.',
+    tip:'Hanya kelingking yang berdiri, sisanya tertutup semua.' },
+  { id:'J', type:'alphabet', letter:'J', emoji:'🤙', category:'Alfabet',
+    desc:'Mulai dari posisi I (kelingking tegak), lalu gambar huruf J di udara dengan gerakan melengkung.',
+    tip:'Gerakan: dari atas turun lurus lalu lengkung ke kiri (mirip huruf J).' },
+  { id:'K', type:'alphabet', letter:'K', emoji:'✌️', category:'Alfabet',
+    desc:'Telunjuk dan jari tengah tegak membentuk V, ibu jari menyentuh/menjepit sisi bawah jari tengah.',
+    tip:'Mirip huruf V tetapi ibu jari ada di antara kedua jari.' },
+  { id:'L', type:'alphabet', letter:'L', emoji:'👆', category:'Alfabet',
+    desc:'Telunjuk lurus tegak ke atas dan ibu jari lurus ke samping membentuk sudut siku-siku (huruf L).',
+    tip:'Tiga jari lain dilipat rapi ke telapak.' },
+  { id:'M', type:'alphabet', letter:'M', emoji:'✊', category:'Alfabet',
+    desc:'Tiga jari (telunjuk, tengah, manis) menekuk ke bawah menutup ibu jari yang terlipat ke telapak.',
+    tip:'Mirip N namun menggunakan tiga jari yang menutup ibu jari.' },
+  { id:'N', type:'alphabet', letter:'N', emoji:'✊', category:'Alfabet',
+    desc:'Dua jari (telunjuk dan jari tengah) menekuk ke bawah menutup ibu jari yang terlipat.',
+    tip:'Seperti M tetapi hanya dua jari yang menutup ibu jari.' },
+  { id:'O', type:'alphabet', letter:'O', emoji:'⭕', category:'Alfabet',
+    desc:'Semua ujung jari menyentuh ibu jari membentuk lingkaran penuh seperti huruf O.',
+    tip:'Buat lingkaran sesempurna mungkin, semua jari menyentuh ibu jari.' },
+  { id:'P', type:'alphabet', letter:'P', emoji:'👇', category:'Alfabet',
+    desc:'Seperti posisi K tetapi dirotasikan ke bawah — telunjuk dan tengah menunjuk ke bawah, ibu jari ke depan.',
+    tip:'Bayangkan huruf K yang dibalik/diputar 90° ke bawah.' },
+  { id:'Q', type:'alphabet', letter:'Q', emoji:'👇', category:'Alfabet',
+    desc:'Seperti posisi G tetapi dirotasikan ke bawah — telunjuk dan ibu jari menunjuk ke bawah.',
+    tip:'G yang diputar: telunjuk dan ibu jari sama-sama ke bawah.' },
+  { id:'R', type:'alphabet', letter:'R', emoji:'🤞', category:'Alfabet',
+    desc:'Telunjuk dan jari tengah saling menyilang/mengunci satu sama lain.',
+    tip:'Sama dengan gesture "semoga berhasil" (crossed fingers).' },
+  { id:'S', type:'alphabet', letter:'S', emoji:'✊', category:'Alfabet',
+    desc:'Kepalan tangan dengan ibu jari menutup di atas jari-jari yang sudah terlipat.',
+    tip:'Mirip kepalan biasa tapi ibu jari berada di luar menutupi jari.' },
+  { id:'T', type:'alphabet', letter:'T', emoji:'✊', category:'Alfabet',
+    desc:'Kepalan tangan, ibu jari menyembul di antara telunjuk dan jari tengah yang dilipat.',
+    tip:'Sedikit berbeda dari S — ibu jari muncul di sela telunjuk & tengah.' },
+  { id:'U', type:'alphabet', letter:'U', emoji:'✌️', category:'Alfabet',
+    desc:'Telunjuk dan jari tengah lurus tegak ke atas berdampingan rapat. Jari lain dilipat.',
+    tip:'Mirip V tetapi kedua jari rapat — tidak membentuk sudut.' },
+  { id:'V', type:'alphabet', letter:'V', emoji:'✌️', category:'Alfabet',
+    desc:'Telunjuk dan jari tengah tegak ke atas membentuk sudut V yang jelas terbuka.',
+    tip:'Gesture perdamaian/victory yang umum — jari harus terpisah jelas.' },
+  { id:'W', type:'alphabet', letter:'W', emoji:'🖖', category:'Alfabet',
+    desc:'Tiga jari (telunjuk, jari tengah, jari manis) tegak terbuka. Kelingking dan ibu jari dilipat.',
+    tip:'Mirip gesture Spock/Star Trek dengan tiga jari yang terbuka.' },
+  { id:'X', type:'alphabet', letter:'X', emoji:'☝️', category:'Alfabet',
+    desc:'Telunjuk melengkung/mengait ke depan seperti bentuk kait. Jari lain dilipat.',
+    tip:'Hanya telunjuk yang aktif, dibengkokkan ke depan seperti kail pancing.' },
+  { id:'Y', type:'alphabet', letter:'Y', emoji:'🤙', category:'Alfabet',
+    desc:'Ibu jari dan kelingking tegak menjulur ke luar, tiga jari tengah dilipat ke telapak.',
+    tip:'Gesture "shaka" atau "hang loose" yang populer di Hawaii/surfing.' },
+  { id:'Z', type:'alphabet', letter:'Z', emoji:'☝️', category:'Alfabet',
+    desc:'Gunakan telunjuk untuk menggambar huruf Z di udara (diagonal kiri → diagonal kanan → kanan bawah).',
+    tip:'Satu-satunya isyarat alfabet yang menggunakan gerakan (bukan statis).' }
+];
+
+// Category color map
+const CAT_COLORS = {
+  'Alfabet':'cat-alphabet'
+};
+
+let activeFilter = 'all';
+let currentSign  = null;
+
+function getSignImage(s) {
+  if (s.img) return s.img;
+  const l = (s.letter || 'A').toUpperCase();
+  return (l >= 'A' && l <= 'Z') ? (l + '.jpg') : 'A.jpg';
+}
+
+function renderGrid(data) {
+  const grid = document.getElementById('dictGrid');
+  const empty = document.getElementById('emptyState');
+  grid.innerHTML = '';
+  if (!data || !data.length) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+
+  data.forEach((s, i) => {
+    const displayWord = s.letter;
+    const badgeText   = s.letter;
+    const imgFile     = getSignImage(s);
+    const card = document.createElement('div');
+    card.className = 'sign-card fade-in';
+    card.id = `card_${s.letter}`;
+    card.style.animationDelay = (i * 0.015) + 's';
+    card.dataset.type = s.type;
+    card.dataset.id   = s.id;
+    card.innerHTML = `
+      <div class="sign-display">
+        <img src="/static/img/signs/${imgFile}" alt="Huruf ${displayWord}" class="sign-img" onerror="this.onerror=null; this.src='/static/img/signs/${s.letter ? s.letter + '.jpg' : 'A.jpg'}';" />
+        <span class="sign-letter-badge">Huruf ${badgeText}</span>
+        <button class="sign-voice-btn" onclick="event.stopPropagation(); speakSignWord('Huruf ${s.letter}')" title="Dengarkan pengucapan"><i class="fa-solid fa-volume-high"></i></button>
+      </div>
+      <div class="sign-body">
+        <div class="sign-word" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>Huruf ${displayWord}</span>
+          <span style="font-size:0.7rem;font-weight:700;color:var(--text3);text-transform:uppercase;">BISINDO</span>
+        </div>
+        <div class="sign-desc">${s.desc}</div>
+      </div>`;
+    card.addEventListener('click', () => openModal(s));
+    grid.appendChild(card);
+  });
+}
+
+function filterCards() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  const filtered = SIGNS.filter(s => {
+    const matchFilter = (activeFilter === 'all') || (s.letter.toLowerCase() === activeFilter.toLowerCase());
+    const label = (s.letter || '').toLowerCase();
+    const matchSearch = !q || label.includes(q) || s.desc.toLowerCase().includes(q) || ('huruf ' + label).includes(q);
+    return matchFilter && matchSearch;
+  });
+  const termEl = document.getElementById('searchTerm');
+  if (termEl) termEl.textContent = q;
+  renderGrid(filtered);
+}
+
+function setLetterFilter(letter, btn) {
+  activeFilter = letter;
+  document.querySelectorAll('#quickAlphaBar button, .filter-tabs button').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  const allBtn = document.getElementById('filterAllBtn');
+  if (allBtn && letter === 'all') allBtn.classList.add('active');
+
+  const searchInp = document.getElementById('searchInput');
+  if (searchInp) searchInp.value = '';
+
+  filterCards();
+
+  if (letter !== 'all') {
+    const targetCard = document.getElementById(`card_${letter}`);
+    if (targetCard) {
+      targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      targetCard.style.outline = '2px solid var(--accent)';
+      setTimeout(() => { targetCard.style.outline = 'none'; }, 1500);
+    }
+  }
+}
+
+function buildQuickAlphaBar() {
+  const bar = document.getElementById('quickAlphaBar');
+  if (!bar) return;
+  bar.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'ftab active';
+  allBtn.style.padding = '4px 10px';
+  allBtn.style.fontSize = '0.78rem';
+  allBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Semua (A–Z)';
+  allBtn.onclick = () => setLetterFilter('all', allBtn);
+  bar.appendChild(allBtn);
+
+  SIGNS.forEach(s => {
+    const btn = document.createElement('button');
+    btn.className = 'ftab';
+    btn.style.padding = '4px 8px';
+    btn.style.fontSize = '0.78rem';
+    btn.style.minWidth = '28px';
+    btn.style.textAlign = 'center';
+    btn.textContent = s.letter;
+    btn.onclick = () => setLetterFilter(s.letter, btn);
+    bar.appendChild(btn);
+  });
+}
+
+function openModal(s) {
+  currentSign = s;
+  const imgFile = getSignImage(s);
+  const mImg = document.getElementById('mImg');
+  mImg.src = `/static/img/signs/${imgFile}`;
+  mImg.onerror = () => { mImg.src = '/static/img/signs/A.jpg'; };
+
+  const titleText = 'Huruf ' + s.letter;
+  document.getElementById('mLetter').textContent = s.letter;
+  document.getElementById('mTitle').textContent  = titleText;
+  document.getElementById('mCat').textContent    = 'Kategori: Alfabet BISINDO';
+  document.getElementById('mDesc').textContent   = s.desc;
+  document.getElementById('mTip').textContent    = s.tip;
+  document.getElementById('signModal').classList.add('open');
+}
+
+function navModal(delta) {
+  if (!currentSign) return;
+  const idx = SIGNS.findIndex(s => s.letter === currentSign.letter);
+  if (idx === -1) return;
+  const nextIdx = (idx + delta + SIGNS.length) % SIGNS.length;
+  openModal(SIGNS[nextIdx]);
+}
+
+function closeModal() {
+  document.getElementById('signModal').classList.remove('open');
+}
+
+function closeModalOutside(e) {
+  if (e.target === document.getElementById('signModal')) closeModal();
+}
+
+function speakCurrent() {
+  if (!currentSign) return;
+  speakSignWord('Huruf ' + currentSign.letter);
+}
+
+// ── Text-to-Sign Studio Functions ─────────────────────────
+let dictSequence = [];
+let lastDictText = '';
+
+function setStudioWord(w) {
+  const inp = document.getElementById('ttsSignInput');
+  if (inp) {
+    inp.value = w;
+    generateSignSequence();
+  }
+}
+
+function generateSignSequence() {
+  const inp = document.getElementById('ttsSignInput');
+  const text = inp.value.trim().toUpperCase();
+  if (!text) return;
+  lastDictText = text;
+
+  const area = document.getElementById('ttsSignOutputArea');
+  const row  = document.getElementById('ttsSignCardRow');
+  row.innerHTML = '';
+  dictSequence = [];
+
+  for (const ch of text) {
+    if (ch >= 'A' && ch <= 'Z') {
+      const foundL = SIGNS.find(s => s.letter === ch);
+      dictSequence.push({
+        label: ch,
+        img: ch + '.jpg',
+        desc: foundL ? foundL.desc : ('Isyarat huruf ' + ch)
+      });
+    }
+  }
+
+  if (!dictSequence.length) return;
+
+  area.style.display = 'block';
+
+  dictSequence.forEach((item, idx) => {
+    const card = document.createElement('div');
+    card.id = `dictPill_${idx}`;
+    card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 12px;min-width:76px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all 0.2s;';
+    card.innerHTML = `
+      <img src="/static/img/signs/${item.img}" alt="${item.label}" style="width:48px;height:48px;object-fit:contain;margin-bottom:4px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.06));" onerror="this.onerror=null; this.src='/static/img/signs/A.jpg';" />
+      <div style="font-size:0.9rem;font-weight:800;color:var(--text);">${item.label}</div>
+    `;
+    card.title = item.desc;
+    card.onclick = () => {
+      document.querySelectorAll('#ttsSignCardRow > div').forEach(c => c.style.borderColor = 'var(--border)');
+      card.style.borderColor = 'var(--accent)';
+      speakSignWord('Huruf ' + item.label);
+    };
+    row.appendChild(card);
+  });
+
+  playDictSequence();
+  speakDictText();
+}
+
+function playDictSequence() {
+  if (!dictSequence.length) return;
+  let idx = 0;
+  const cards = document.querySelectorAll('#ttsSignCardRow > div');
+  const timer = setInterval(() => {
+    cards.forEach(c => {
+      c.style.borderColor = 'var(--border)';
+      c.style.transform = 'none';
+      c.style.background = 'var(--surface)';
+    });
+    const current = document.getElementById(`dictPill_${idx}`);
+    if (current) {
+      current.style.borderColor = 'var(--accent)';
+      current.style.transform = 'translateY(-3px)';
+      current.style.background = 'rgba(139,92,246,0.18)';
+      current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    }
+    idx++;
+    if (idx >= dictSequence.length) {
+      clearInterval(timer);
+      setTimeout(() => {
+        cards.forEach(c => {
+          c.style.borderColor = 'var(--border)';
+          c.style.transform = 'none';
+          c.style.background = 'var(--surface)';
+        });
+      }, 1000);
+    }
+  }, 650);
+}
+
+function speakDictText() {
+  if (!lastDictText) return;
+  const u = new SpeechSynthesisUtterance(lastDictText);
+  u.lang = 'id-ID';
+  u.rate = 0.9;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+function speakSignWord(w) {
+  const u = new SpeechSynthesisUtterance(w);
+  u.lang = 'id-ID';
+  speechSynthesis.cancel();
+  speechSynthesis.speak(u);
+}
+
+// Keyboard shortcuts: Escape to close modal, Left/Right arrow to navigate modal
+document.addEventListener('keydown', e => {
+  if (document.getElementById('signModal').classList.contains('open')) {
+    if (e.key === 'Escape') closeModal();
+    if (e.key === 'ArrowLeft') navModal(-1);
+    if (e.key === 'ArrowRight') navModal(1);
+  }
+});
+
+// Init on Page Load
+buildQuickAlphaBar();
+renderGrid(SIGNS);
+</script>
+{% endblock %}
+
